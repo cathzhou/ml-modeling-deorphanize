@@ -375,6 +375,17 @@ def write_distribution_info(df_data, y_data, groups_data, gtp_families_data, tra
                 overlap = len(set(split_groups) & set(other_groups))
                 f.write(f"  Group overlap with {other_name}: {overlap} groups\n")
 
+# Create balanced splits
+print("\nCreating splits for balanced subset...")
+train_mask_balanced, val_mask_balanced, test_mask_balanced = create_balanced_splits(
+    groups_subset, y_subset
+)
+
+print("\nCreating splits for random subset...")
+train_mask_random, val_mask_random, test_mask_random = create_balanced_splits(
+    groups_random_subset, y_random_subset
+)
+
 # Save distribution information to text files
 print("\nSaving distribution information...")
 write_distribution_info(
@@ -926,5 +937,49 @@ with open(feature_info_path, 'w') as f:
 
 print(f"\nFeature descriptions saved to: {feature_info_path}")
 
+
+# %%
+
+# Create split assignment columns
+def create_split_assignments(df, subset_indices, train_mask, val_mask, test_mask):
+    """Create a series with split assignments including unused samples"""
+    split_assignments = pd.Series(index=df.index, data='unused')
+    subset_df = pd.Series(index=subset_indices)
+    
+    # Assign splits for samples in the subset
+    subset_df[train_mask] = 'train'
+    subset_df[val_mask] = 'validation'
+    subset_df[test_mask] = 'test'
+    
+    # Update the full dataset assignments
+    split_assignments[subset_indices] = subset_df
+    
+    return split_assignments
+
+# Create split assignment columns for both approaches
+balanced_splits = create_split_assignments(
+    df, subset_indices, 
+    train_mask_balanced, val_mask_balanced, test_mask_balanced
+)
+random_splits = create_split_assignments(
+    df, random_subset_indices,
+    train_mask_random, val_mask_random, test_mask_random
+)
+
+# Add split columns to original dataframe
+df['balanced_split'] = balanced_splits
+df['random_split'] = random_splits
+
+# Save updated dataframe
+print("\nSaving updated CSV with split assignments...")
+df.to_csv(filepath, index=False)
+print("Split assignments saved to original CSV file.")
+
+# Print split distribution summary
+print("\nSplit Distribution Summary:")
+print("\nBalanced Splits:")
+print(df['balanced_split'].value_counts())
+print("\nRandom Splits:")
+print(df['random_split'].value_counts())
 
 # %%
