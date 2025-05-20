@@ -1,0 +1,134 @@
+Feature Selection Analysis Summary
+==================================================
+
+Most consistently selected features:
+- 7.39_48_CP (selected by 6 methods)
+- 2.60_48_CP (selected by 6 methods)
+- 2.63_43_CP (selected by 5 methods)
+- 2.61_46_CP (selected by 5 methods)
+- 3.36_48_CP (selected by 5 methods)
+- 4.64_37 (selected by 5 methods)
+- 7.33_46_CP (selected by 5 methods)
+- N4_44 (selected by 5 methods)
+- 7.43_48 (selected by 5 methods)
+- 5.36_40_CP (selected by 5 methods)
+- 7.31_39_CP (selected by 4 methods)
+- 7.35_48_CP (selected by 4 methods)
+- 7.40_48 (selected by 4 methods)
+- 2.67_27 (selected by 4 methods)
+- 6.55_44_CP (selected by 4 methods)
+- N26_32 (selected by 4 methods)
+- 23.49_28 (selected by 4 methods)
+- 5.42_48 (selected by 4 methods)
+
+Performance comparison across methods:
+
+Validation Set:
+
+accuracy:
+- anova: 0.787
+- mutual_info: 0.662
+- random_forest: 0.762
+- l1_logistic: 0.762
+- rfe: 0.688
+- boruta: 0.812
+- correlation: 0.762
+
+f1:
+- anova: 0.795
+- mutual_info: 0.690
+- random_forest: 0.753
+- l1_logistic: 0.782
+- rfe: 0.699
+- boruta: 0.810
+- correlation: 0.747
+
+precision:
+- anova: 0.767
+- mutual_info: 0.638
+- random_forest: 0.784
+- l1_logistic: 0.723
+- rfe: 0.674
+- boruta: 0.821
+- correlation: 0.800
+
+recall:
+- anova: 0.825
+- mutual_info: 0.750
+- random_forest: 0.725
+- l1_logistic: 0.850
+- rfe: 0.725
+- boruta: 0.800
+- correlation: 0.700
+
+roc_auc:
+- anova: 0.769
+- mutual_info: 0.720
+- random_forest: 0.837
+- l1_logistic: 0.848
+- rfe: 0.783
+- boruta: 0.856
+- correlation: 0.785
+
+Test Set:
+
+accuracy:
+- anova: 0.625
+- mutual_info: 0.775
+- random_forest: 0.575
+- l1_logistic: 0.750
+- rfe: 0.688
+- boruta: 0.675
+- correlation: 0.613
+
+f1:
+- anova: 0.571
+- mutual_info: 0.780
+- random_forest: 0.433
+- l1_logistic: 0.762
+- rfe: 0.648
+- boruta: 0.618
+- correlation: 0.563
+
+precision:
+- anova: 0.667
+- mutual_info: 0.762
+- random_forest: 0.650
+- l1_logistic: 0.727
+- rfe: 0.742
+- boruta: 0.750
+- correlation: 0.645
+
+recall:
+- anova: 0.500
+- mutual_info: 0.800
+- random_forest: 0.325
+- l1_logistic: 0.800
+- rfe: 0.575
+- boruta: 0.525
+- correlation: 0.500
+
+roc_auc:
+- anova: 0.647
+- mutual_info: 0.772
+- random_forest: 0.749
+- l1_logistic: 0.908
+- rfe: 0.793
+- boruta: 0.809
+- correlation: 0.658
+
+Best performing methods:
+
+Validation Set:
+- Best accuracy: boruta (0.812)
+- Best f1: boruta (0.810)
+- Best precision: boruta (0.821)
+- Best recall: l1_logistic (0.850)
+- Best roc_auc: boruta (0.856)
+
+Test Set:
+- Best accuracy: mutual_info (0.775)
+- Best f1: mutual_info (0.780)
+- Best precision: mutual_info (0.762)
+- Best recall: mutual_info (0.800)
+- Best roc_auc: l1_logistic (0.908)

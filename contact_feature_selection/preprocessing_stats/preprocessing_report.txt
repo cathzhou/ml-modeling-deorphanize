@@ -1,0 +1,22 @@
+Data Preprocessing Report
+==================================================
+
+Balanced Subset Statistics
+------------------------------
+Total samples: 381
+Features with missing values: 0
+Features with infinite values: 0
+
+Random Subset Statistics
+------------------------------
+Total samples: 420
+Features with missing values: 0
+Features with infinite values: 0
+
+
+Features with high missing value percentages (>5%):
+--------------------------------------------------
+
+Balanced Subset:
+
+Random Subset:
