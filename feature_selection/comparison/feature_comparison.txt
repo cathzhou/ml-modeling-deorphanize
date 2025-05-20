@@ -1,0 +1,256 @@
+Feature Selection Comparison: Balanced vs Random Subsets
+============================================================
+
+
+ANOVA
+--------------------
+Common features (19):
+- avg_n_models
+- best_contact_score_max
+- best_if_residues
+- best_num_residue_contacts
+- iptm
+- iptm+ptm
+- iptm_max
+- iptm_mean
+- iptm_min
+- max_n_models
+- mean_contacts_across_predictions
+- min_contacts_across_predictions
+- num_contacts_with_max_n_models
+- num_unique_contacts
+- pLDDT_lig1
+- pLDDT_lig1_CT
+- paeL_mean
+- paeR_mean
+- spoc_score
+
+Features unique to balanced subset (1):
+- pLDDT_lig1_NT
+
+Features unique to random subset (1):
+- best_plddt_max
+
+Jaccard similarity: 0.905
+
+MUTUAL_INFO
+--------------------
+Common features (19):
+- avg_n_models
+- best_contact_score_max
+- best_if_residues
+- best_num_residue_contacts
+- best_pae_min
+- best_plddt_max
+- colocalization_match_score
+- depmap_abs_diff
+- depmap_cosine_dist
+- depmap_euclidian_dist
+- iptm_max
+- iptm_mean
+- iptm_min
+- mean_contacts_across_predictions
+- num_contacts_with_max_n_models
+- num_unique_contacts
+- spoc_score
+- t5_embedding_cosine_dist
+- t5_embedding_euclidian_dist
+
+Features unique to balanced subset (1):
+- max_n_models
+
+Features unique to random subset (1):
+- crispr_jaccard
+
+Jaccard similarity: 0.905
+
+RANDOM_FOREST
+--------------------
+Common features (18):
+- avg_n_models
+- best_contact_score_max
+- best_if_residues
+- best_num_residue_contacts
+- best_plddt_max
+- iptm
+- iptm+ptm
+- iptm_max
+- iptm_mean
+- iptm_min
+- mean_contacts_across_predictions
+- min_contacts_across_predictions
+- num_unique_contacts
+- pLDDT_lig1
+- pLDDT_lig1_NT
+- paeL_mean
+- paeR_mean
+- spoc_score
+
+Features unique to balanced subset (2):
+- best_pae_min
+- max_n_models
+
+Features unique to random subset (2):
+- crispr_jaccard
+- num_contacts_with_max_n_models
+
+Jaccard similarity: 0.818
+
+L1_LOGISTIC
+--------------------
+Common features (5):
+- 1.35_48_CP
+- 2.67_27
+- best_pae_min
+- max_n_models
+- pLDDT_lig1_NT
+
+Features unique to balanced subset (15):
+- 1.28_25_CP
+- 2.66_37
+- 45.51_40
+- 6.52_47_CP
+- 6.55_44_CP
+- 6.56_44
+- 7.40_48
+- 7.41_48_CP
+- N7_44
+- TM5_IC_lig1_mid
+- favorability_mean
+- iptm_max
+- ligContacts_TM5
+- spoc_score
+- t5_embedding_euclidian_dist
+
+Features unique to random subset (15):
+- 3.29_48_CP
+- 4.57_48_CP
+- 7.31_39_CP
+- 7.32_45
+- 7.39_48_CP
+- avg_n_models
+- best_contact_score_max
+- best_num_residue_contacts
+- biogrid_detect_count
+- colocalization_match_score
+- crispr_jaccard
+- depmap_abs_diff
+- iptm_mean
+- iptm_min
+- mean_contacts_across_predictions
+
+Jaccard similarity: 0.143
+
+RFE
+--------------------
+Common features (10):
+- avg_n_models
+- best_contact_score_max
+- best_plddt_max
+- favorability_mean
+- iptm_max
+- iptm_mean
+- mean_contacts_across_predictions
+- num_unique_contacts
+- pLDDT_all_residues
+- spoc_score
+
+Features unique to balanced subset (10):
+- TM1_mid_lig1_NT
+- TM2_EC_lig1_mid
+- TM3_mid_lig1_NT
+- TM5_EC_lig1_mid
+- best_num_residue_contacts
+- ligContacts_TM2
+- max_n_models
+- mid_lig1_NT
+- paeL_mean
+- t5_embedding_euclidian_dist
+
+Features unique to random subset (10):
+- best_if_residues
+- biogrid_detect_count
+- colocalization_match_score
+- crispr_jaccard
+- crispr_shared_hit_count
+- depmap_abs_diff
+- iptm
+- iptm_min
+- ligContacts_TM7
+- num_contacts_with_max_n_models
+
+Jaccard similarity: 0.333
+
+BORUTA
+--------------------
+Common features (7):
+- TM2_mid_lig1_NT
+- TM3_mid_lig1_NT
+- TM4_EC_lig1_mid
+- TM6_EC_lig1_mid
+- iptm
+- pLDDT_lig1_CT
+- pLDDT_lig1_NT
+
+Features unique to balanced subset (13):
+- TM2_EC_lig1_mid
+- TM4_mid_lig1_NT
+- TM5_EC_lig1_mid
+- TM5_mid_lig1_NT
+- TM6_mid_lig1_NT
+- TM7_mid_lig1_NT
+- iptm+ptm
+- mid_lig1_CT
+- pLDDT_all_residues
+- pLDDT_lig1
+- pLDDT_rec
+- paeR_mean
+- totalCP
+
+Features unique to random subset (13):
+- TM1_EC_lig1_mid
+- TM1_IC_lig1_mid
+- TM1_mid_lig1_CT
+- TM1_mid_lig1_NT
+- TM2_IC_lig1_mid
+- TM2_mid_lig1_CT
+- TM3_IC_lig1_mid
+- TM3_mid_lig1_CT
+- TM4_IC_lig1_mid
+- TM5_IC_lig1_mid
+- TM7_EC_lig1_mid
+- TM7_IC_lig1_mid
+- TM7_mid_lig1_CT
+
+Jaccard similarity: 0.212
+
+CORRELATION
+--------------------
+Common features (19):
+- avg_n_models
+- best_contact_score_max
+- best_if_residues
+- best_num_residue_contacts
+- iptm
+- iptm+ptm
+- iptm_max
+- iptm_mean
+- iptm_min
+- max_n_models
+- mean_contacts_across_predictions
+- min_contacts_across_predictions
+- num_contacts_with_max_n_models
+- num_unique_contacts
+- pLDDT_lig1
+- pLDDT_lig1_CT
+- paeL_mean
+- paeR_mean
+- spoc_score
+
+Features unique to balanced subset (1):
+- pLDDT_lig1_NT
+
+Features unique to random subset (1):
+- best_plddt_max
+
+Jaccard similarity: 0.905
