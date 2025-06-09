@@ -1,0 +1,132 @@
+Column labels	Column id
+Single Cell Type RNA - Adipocytes [nTPM]	sc_RNA_Adipocytes
+Single Cell Type RNA - Alveolar cells type 1 [nTPM]	sc_RNA_Alveolar_cells_type_1
+Single Cell Type RNA - Alveolar cells type 2 [nTPM]	sc_RNA_Alveolar_cells_type_2
+Single Cell Type RNA - Astrocytes [nTPM]	sc_RNA_Astrocytes
+Single Cell Type RNA - B-cells [nTPM]	sc_RNA_B-cells
+Single Cell Type RNA - Basal keratinocytes [nTPM]	sc_RNA_Basal_keratinocytes
+Single Cell Type RNA - Basal prostatic cells [nTPM]	sc_RNA_Basal_prostatic_cells
+Single Cell Type RNA - Basal respiratory cells [nTPM]	sc_RNA_Basal_respiratory_cells
+Single Cell Type RNA - Basal squamous epithelial cells [nTPM]	sc_RNA_Basal_squamous_epithelial_cells
+Single Cell Type RNA - Bipolar cells [nTPM]	sc_RNA_Bipolar_cells
+Single Cell Type RNA - Breast glandular cells [nTPM]	sc_RNA_Breast_glandular_cells
+Single Cell Type RNA - Breast myoepithelial cells [nTPM]	sc_RNA_Breast_myoepithelial_cells
+Single Cell Type RNA - Cardiomyocytes [nTPM]	sc_RNA_Cardiomyocytes
+Single Cell Type RNA - Cholangiocytes [nTPM]	sc_RNA_Cholangiocytes
+Single Cell Type RNA - Ciliated cells [nTPM]	sc_RNA_Ciliated_cells
+Single Cell Type RNA - Club cells [nTPM]	sc_RNA_Club_cells
+Single Cell Type RNA - Collecting duct cells [nTPM]	sc_RNA_Collecting_duct_cells
+Single Cell Type RNA - Cone photoreceptor cells [nTPM]	sc_RNA_Cone_photoreceptor_cells
+Single Cell Type RNA - Cytotrophoblasts [nTPM]	sc_RNA_Cytotrophoblasts
+Single Cell Type RNA - dendritic cells [nTPM]	sc_RNA_dendritic_cells
+Single Cell Type RNA - Distal enterocytes [nTPM]	sc_RNA_Distal_enterocytes
+Single Cell Type RNA - Distal tubular cells [nTPM]	sc_RNA_Distal_tubular_cells
+Single Cell Type RNA - Ductal cells [nTPM]	sc_RNA_Ductal_cells
+Single Cell Type RNA - Early spermatids [nTPM]	sc_RNA_Early_spermatids
+Single Cell Type RNA - Endometrial stromal cells [nTPM]	sc_RNA_Endometrial_stromal_cells
+Single Cell Type RNA - Endothelial cells [nTPM]	sc_RNA_Endothelial_cells
+Single Cell Type RNA - Enteroendocrine cells [nTPM]	sc_RNA_Enteroendocrine_cells
+Single Cell Type RNA - Erythroid cells [nTPM]	sc_RNA_Erythroid_cells
+Single Cell Type RNA - Excitatory neurons [nTPM]	sc_RNA_Excitatory_neurons
+Single Cell Type RNA - Exocrine glandular cells [nTPM]	sc_RNA_Exocrine_glandular_cells
+Single Cell Type RNA - Extravillous trophoblasts [nTPM]	sc_RNA_Extravillous_trophoblasts
+Single Cell Type RNA - Fibroblasts [nTPM]	sc_RNA_Fibroblasts
+Single Cell Type RNA - Gastric mucus-secreting cells [nTPM]	sc_RNA_Gastric_mucus-secreting_cells
+Single Cell Type RNA - Glandular and luminal cells [nTPM]	sc_RNA_Glandular_and_luminal_cells
+Single Cell Type RNA - granulocytes [nTPM]	sc_RNA_granulocytes
+Single Cell Type RNA - Granulosa cells [nTPM]	sc_RNA_Granulosa_cells
+Single Cell Type RNA - Hepatocytes [nTPM]	sc_RNA_Hepatocytes
+Single Cell Type RNA - Hofbauer cells [nTPM]	sc_RNA_Hofbauer_cells
+Single Cell Type RNA - Horizontal cells [nTPM]	sc_RNA_Horizontal_cells
+Single Cell Type RNA - Inhibitory neurons [nTPM]	sc_RNA_Inhibitory_neurons
+Single Cell Type RNA - Intestinal goblet cells [nTPM]	sc_RNA_Intestinal_goblet_cells
+Single Cell Type RNA - Ionocytes [nTPM]	sc_RNA_Ionocytes
+Single Cell Type RNA - Kupffer cells [nTPM]	sc_RNA_Kupffer_cells
+Single Cell Type RNA - Langerhans cells [nTPM]	sc_RNA_Langerhans_cells
+Single Cell Type RNA - Late spermatids [nTPM]	sc_RNA_Late_spermatids
+Single Cell Type RNA - Leydig cells [nTPM]	sc_RNA_Leydig_cells
+Single Cell Type RNA - Lymphatic endothelial cells [nTPM]	sc_RNA_Lymphatic_endothelial_cells
+Single Cell Type RNA - Macrophages [nTPM]	sc_RNA_Macrophages
+Single Cell Type RNA - Melanocytes [nTPM]	sc_RNA_Melanocytes
+Single Cell Type RNA - Mesothelial cells [nTPM]	sc_RNA_Mesothelial_cells
+Single Cell Type RNA - Microglial cells [nTPM]	sc_RNA_Microglial_cells
+Single Cell Type RNA - monocytes [nTPM]	sc_RNA_monocytes
+Single Cell Type RNA - Mucus glandular cells [nTPM]	sc_RNA_Mucus_glandular_cells
+Single Cell Type RNA - Muller glia cells [nTPM]	sc_RNA_Muller_glia_cells
+Single Cell Type RNA - NK-cells [nTPM]	sc_RNA_NK-cells
+Single Cell Type RNA - Oligodendrocyte precursor cells [nTPM]	sc_RNA_Oligodendrocyte_precursor_cells
+Single Cell Type RNA - Oligodendrocytes [nTPM]	sc_RNA_Oligodendrocytes
+Single Cell Type RNA - Oocytes [nTPM]	sc_RNA_Oocytes
+Single Cell Type RNA - Ovarian stromal cells [nTPM]	sc_RNA_Ovarian_stromal_cells
+Single Cell Type RNA - Pancreatic endocrine cells [nTPM]	sc_RNA_Pancreatic_endocrine_cells
+Single Cell Type RNA - Paneth cells [nTPM]	sc_RNA_Paneth_cells
+Single Cell Type RNA - Peritubular cells [nTPM]	sc_RNA_Peritubular_cells
+Single Cell Type RNA - Plasma cells [nTPM]	sc_RNA_Plasma_cells
+Single Cell Type RNA - Prostatic glandular cells [nTPM]	sc_RNA_Prostatic_glandular_cells
+Single Cell Type RNA - Proximal enterocytes [nTPM]	sc_RNA_Proximal_enterocytes
+Single Cell Type RNA - Proximal tubular cells [nTPM]	sc_RNA_Proximal_tubular_cells
+Single Cell Type RNA - Rod photoreceptor cells [nTPM]	sc_RNA_Rod_photoreceptor_cells
+Single Cell Type RNA - Salivary duct cells [nTPM]	sc_RNA_Salivary_duct_cells
+Single Cell Type RNA - Schwann cells [nTPM]	sc_RNA_Schwann_cells
+Single Cell Type RNA - Secretory cells [nTPM]	sc_RNA_Secretory_cells
+Single Cell Type RNA - Serous glandular cells [nTPM]	sc_RNA_Serous_glandular_cells
+Single Cell Type RNA - Sertoli cells [nTPM]	sc_RNA_Sertoli_cells
+Single Cell Type RNA - Skeletal myocytes [nTPM]	sc_RNA_Skeletal_myocytes
+Single Cell Type RNA - Smooth muscle cells [nTPM]	sc_RNA_Smooth_muscle_cells
+Single Cell Type RNA - Spermatocytes [nTPM]	sc_RNA_Spermatocytes
+Single Cell Type RNA - Spermatogonia [nTPM]	sc_RNA_Spermatogonia
+Single Cell Type RNA - Squamous epithelial cells [nTPM]	sc_RNA_Squamous_epithelial_cells
+Single Cell Type RNA - Suprabasal keratinocytes [nTPM]	sc_RNA_Suprabasal_keratinocytes
+Single Cell Type RNA - Syncytiotrophoblasts [nTPM]	sc_RNA_Syncytiotrophoblasts
+Single Cell Type RNA - T-cells [nTPM]	sc_RNA_T-cells
+Single Cell Type RNA - Undifferentiated cells [nTPM]	sc_RNA_Undifferentiated_cells
+Tissue RNA - adipose tissue [nTPM]	t_RNA_adipose_tissue
+Tissue RNA - adrenal gland [nTPM]	t_RNA_adrenal_gland
+Tissue RNA - amygdala [nTPM]	t_RNA_amygdala
+Tissue RNA - appendix [nTPM]	t_RNA_appendix
+Tissue RNA - basal ganglia [nTPM]	t_RNA_basal_ganglia
+Tissue RNA - bone marrow [nTPM]	t_RNA_bone_marrow
+Tissue RNA - breast [nTPM]	t_RNA_breast
+Tissue RNA - cerebellum [nTPM]	t_RNA_cerebellum
+Tissue RNA - cerebral cortex [nTPM]	t_RNA_cerebral_cortex
+Tissue RNA - cervix [nTPM]	t_RNA_cervix
+Tissue RNA - choroid plexus [nTPM]	t_RNA_choroid_plexus
+Tissue RNA - colon [nTPM]	t_RNA_colon
+Tissue RNA - duodenum [nTPM]	t_RNA_duodenum
+Tissue RNA - endometrium 1 [nTPM]	t_RNA_endometrium_1
+Tissue RNA - epididymis [nTPM]	t_RNA_epididymis
+Tissue RNA - esophagus [nTPM]	t_RNA_esophagus
+Tissue RNA - fallopian tube [nTPM]	t_RNA_fallopian_tube
+Tissue RNA - gallbladder [nTPM]	t_RNA_gallbladder
+Tissue RNA - heart muscle [nTPM]	t_RNA_heart_muscle
+Tissue RNA - hippocampal formation [nTPM]	t_RNA_hippocampal_formation
+Tissue RNA - hypothalamus [nTPM]	t_RNA_hypothalamus
+Tissue RNA - kidney [nTPM]	t_RNA_kidney
+Tissue RNA - liver [nTPM]	t_RNA_liver
+Tissue RNA - lung [nTPM]	t_RNA_lung
+Tissue RNA - lymph node [nTPM]	t_RNA_lymph_node
+Tissue RNA - midbrain [nTPM]	t_RNA_midbrain
+Tissue RNA - ovary [nTPM]	t_RNA_ovary
+Tissue RNA - pancreas [nTPM]	t_RNA_pancreas
+Tissue RNA - parathyroid gland [nTPM]	t_RNA_parathyroid_gland
+Tissue RNA - pituitary gland [nTPM]	t_RNA_pituitary_gland
+Tissue RNA - placenta [nTPM]	t_RNA_placenta
+Tissue RNA - prostate [nTPM]	t_RNA_prostate
+Tissue RNA - rectum [nTPM]	t_RNA_rectum
+Tissue RNA - retina [nTPM]	t_RNA_retina
+Tissue RNA - salivary gland [nTPM]	t_RNA_salivary_gland
+Tissue RNA - seminal vesicle [nTPM]	t_RNA_seminal_vesicle
+Tissue RNA - skeletal muscle [nTPM]	t_RNA_skeletal_muscle
+Tissue RNA - skin 1 [nTPM]	t_RNA_skin_1
+Tissue RNA - small intestine [nTPM]	t_RNA_small_intestine
+Tissue RNA - smooth muscle [nTPM]	t_RNA_smooth_muscle
+Tissue RNA - spinal cord [nTPM]	t_RNA_spinal_cord
+Tissue RNA - spleen [nTPM]	t_RNA_spleen
+Tissue RNA - stomach 1 [nTPM]	t_RNA_stomach_1
+Tissue RNA - testis [nTPM]	t_RNA_testis
+Tissue RNA - thymus [nTPM]	t_RNA_thymus
+Tissue RNA - thyroid gland [nTPM]	t_RNA_thyroid_gland
+Tissue RNA - tongue [nTPM]	t_RNA_tongue
+Tissue RNA - tonsil [nTPM]	t_RNA_tonsil
+Tissue RNA - urinary bladder [nTPM]	t_RNA_urinary_bladder
+Tissue RNA - vagina [nTPM]	t_RNA_vagina
