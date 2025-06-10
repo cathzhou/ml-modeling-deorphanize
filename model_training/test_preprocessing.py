@@ -119,8 +119,8 @@ def run_preprocessing_test(
             summary['location_distribution'] = df['lig1_location'].value_counts().to_dict()
         
         # Save summary
-        with open(os.path.join(test_dir, 'summary_stats.json'), 'w') as f:
-            json.dump(summary, f, indent=2)
+        #with open(os.path.join(test_dir, 'summary_stats.json'), 'w') as f:
+        #    json.dump(summary, f, indent=2)
             
         logging.info("\nSummary Statistics:")
         logging.info(f"Total samples: {summary['total_samples']}")

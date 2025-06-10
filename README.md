@@ -76,7 +76,7 @@ Each input is a receptor-ligand model.
 
 ### 6. Ligand Information
 
-* Calculated from sequence `sequence` column, ligand sequence comes after the colon
+* Calculated from `sequence` column, ligand sequence comes after the colon
     * `molecular_weight`
     * `n_term_pi`
     * `c_term_pi`
@@ -108,10 +108,9 @@ Each input is a receptor-ligand model.
         * Jaccard index (binary expression overlap)
         * L2 norm of tissue-level expression difference
         * Overlap count in cell types
-        * Count of shared top-10 tissues
 * Shape: `([N_tissues x 2], [N_celltypes x 2], [D_expr])` where `D_expr = 6`
 
-### 9. CladeOScope Score (not done yet)
+### 9. CladeOScope Score (not fully integrated yet)
 
 * Single evolutionary coupling score based on phylogenetic profiles
 * Computed using min_rank method with COMB5 clade combination
@@ -160,17 +159,16 @@ Positional Embedding       ─┤
 * The columns are in the same order as listed in the input_csv_columns.txt file, the description for each column is indicated by what becomes the colon and braces
 * Do not use the columns labeled `dont_use`
 * Make the known and unknown balanced within each set
-* For the unknown, there are 3 different ways of selecting them
+* For the unknown, there are 2 different ways of selecting them
     * Select unknowns by sampling in an even distribution spatially for the umap made by the `nmfUMAP1_af_qc` and `nmfUMAP2_af_qc` columns
     * Do completely random sampling
-    * 
 * Normalize metrics within each of train/valid/test sets
-* Do encoding for categorical columns
+* Perform encoding for categorical columns
 
-### Model Evaluation
-* Do cross validation
+### Models
+* Multiple models based on preprocessing (with/without spoc, with/without expression, etc.)
+* Currently testing: Extracellular only, with spoc but removed non-nan spoc columns
 
-* Do 3
 ---
 
 ### Detailed Modules
@@ -279,7 +277,7 @@ For expression analysis with all receptor/ligand genes :
 
 ### Precompute All Pairwise Expression Vectors
 
-* Save to HDF5 or Feather for fast retrieval
+* Save to csv
 * Indexed by (receptor, ligand)
 
 ---

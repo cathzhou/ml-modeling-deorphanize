@@ -95,10 +95,13 @@ class ContextEncoder(nn.Module):
         self.n_ligand_features = len(config['ligand_metadata_columns'])
         self.n_alphafold_features = len(config['alphafold_metric_columns'])
         self.n_expression_features = len(config['expression_feature_columns'])
-        self.n_categorical_features = len(config['categorical_columns'])
         
-        # Embedding for categorical features
-        self.category_embedding = nn.Linear(self.n_categorical_features, self.d_model // 4)
+        # Individual embeddings for each categorical feature
+        self.categorical_columns = config['categorical_columns']
+        self.categorical_embeddings = nn.ModuleDict({
+            col: nn.Linear(1, self.d_model // (4 * len(self.categorical_columns)))
+            for col in self.categorical_columns
+        })
         
         # Project each feature group
         self.distance_proj = nn.Linear(self.n_distance_features, self.d_model // 4)
@@ -119,7 +122,13 @@ class ContextEncoder(nn.Module):
         ligand_enc = self.ligand_proj(features['ligand_metadata'])
         alphafold_enc = self.alphafold_proj(features['alphafold_metrics'])
         expression_enc = self.expression_proj(features['expression_features'])
-        category_enc = self.category_embedding(features['receptor_metadata'])
+        
+        # Process each categorical feature individually
+        categorical_encs = []
+        for col in self.categorical_columns:
+            cat_feature = features[f'{col}_encoded'].unsqueeze(-1).float()  # Add feature dimension
+            cat_enc = self.categorical_embeddings[col](cat_feature)
+            categorical_encs.append(cat_enc)
         
         # Concatenate all features
         context = torch.cat([
@@ -127,7 +136,7 @@ class ContextEncoder(nn.Module):
             ligand_enc,
             alphafold_enc,
             expression_enc,
-            category_enc
+            *categorical_encs
         ], dim=-1)
         
         return self.final_proj(context)

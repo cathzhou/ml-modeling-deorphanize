@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set, Union
 import json
 import os
+import re
 
 # Set up logging
 logging.basicConfig(
@@ -17,65 +18,48 @@ logging.basicConfig(
 )
 
 class GPCRDataset(Dataset):
-    """PyTorch Dataset for GPCR-Ligand binding data."""
+    """PyTorch Dataset for GPCR-Ligand binding prediction."""
     
     def __init__(self, 
                  features: Dict[str, np.ndarray],
                  labels: np.ndarray,
                  active_feature_groups: Set[str],
+                 config: Dict,
                  is_training: bool = True):
-        """
+        """Initialize dataset.
+        
         Args:
             features: Dictionary of feature arrays
-            labels: Binary labels (0/1)
-            active_feature_groups: Set of feature groups to include
-            is_training: Whether this is for training
+            labels: Array of labels
+            active_feature_groups: Set of active feature groups
+            config: Model configuration dictionary
+            is_training: Whether this is training data
         """
         self.features = features
-        self.labels = torch.FloatTensor(labels)
+        self.labels = labels
         self.active_feature_groups = active_feature_groups
+        self.config = config
         self.is_training = is_training
         
     def __len__(self):
         return len(self.labels)
-        
+    
     def __getitem__(self, idx):
         # Get features based on active feature groups
-        item = {}
+        feature_dict = {}
         
-        if 'residue_contacts' in self.active_feature_groups:
-            item['residue_contacts'] = torch.FloatTensor(self.features['residue_contacts'][idx])
-            item['positional_embedding'] = torch.FloatTensor(self.features['positional_embedding'][idx])
-            
-        if 'distance_metrics' in self.active_feature_groups:
-            item['distance_metrics'] = torch.FloatTensor(self.features['distance_metrics'][idx])
-            
-        if 'ligand_contact_sum' in self.active_feature_groups:
-            item['ligand_contact_sum'] = torch.FloatTensor(self.features['ligand_contact_sum'][idx])
-            
-        if 'ligand_contact_indiv' in self.active_feature_groups:
-            item['ligand_contact_indiv'] = torch.FloatTensor(self.features['ligand_contact_indiv'][idx])
-            
-        if 'receptor_metadata' in self.active_feature_groups:
-            item['receptor_metadata'] = torch.FloatTensor(self.features['receptor_metadata'][idx])
-            
-        if 'ligand_metadata' in self.active_feature_groups:
-            item['ligand_metadata'] = torch.FloatTensor(self.features['ligand_metadata'][idx])
-            
-        if 'alphafold_metrics' in self.active_feature_groups:
-            item['alphafold_metrics'] = torch.FloatTensor(self.features['alphafold_metrics'][idx])
-            
-        if 'expression_features' in self.active_feature_groups:
-            item['expression_features'] = torch.FloatTensor(self.features['expression_features'][idx])
-            
-        if 'spoc_metrics' in self.active_feature_groups:
-            item['spoc_metrics'] = torch.FloatTensor(self.features['spoc_metrics'][idx])
-            
-        if 'expression_profiles' in self.active_feature_groups:
-            item['receptor_expression'] = torch.FloatTensor(self.features['receptor_expression'][idx])
-            item['ligand_expression'] = torch.FloatTensor(self.features['ligand_expression'][idx])
+        # Get standard feature groups
+        for group in self.active_feature_groups:
+            feature_dict[group] = torch.FloatTensor(self.features[group][idx])
         
-        return item, self.labels[idx]
+        # Get individual categorical features
+        for cat_col in self.config['categorical_columns']:
+            feature_dict[f'{cat_col}_encoded'] = torch.LongTensor([self.features[f'{cat_col}_encoded'][idx]])
+        
+        # Get label
+        label = torch.FloatTensor([self.labels[idx]])
+        
+        return feature_dict, label
 
 class DataPreprocessor:
     """Handles data preprocessing for GPCR-Ligand binding prediction."""
@@ -109,14 +93,14 @@ class DataPreprocessor:
         
         # Map feature groups to their column configurations
         group_to_config = {
-            'residue_contacts': 'residue_contact_columns',
-            'distance_metrics': 'distance_metric_columns',
-            'ligand_contact_sum': 'ligand_contact_sum_columns',
-            'ligand_contact_indiv': 'ligand_contact_indiv_columns',
-            'alphafold_metrics': 'alphafold_metric_columns',
-            'expression_features': 'expression_feature_columns',
-            'ligand_metadata': 'ligand_metadata_columns',
-            'spoc_metrics': 'spoc_metric_columns'
+            'residue_contacts': 'residue_contact_columns', # no normalization,0 and 1
+            'distance_metrics': 'distance_metric_columns', # Z score normalized, 0 to 1
+            'ligand_contact_sum': 'ligand_contact_sum_columns', # no normalization, 0 to 1
+            'ligand_contact_indiv': 'ligand_contact_indiv_columns', # no normalization, 0 to 1
+            'alphafold_metrics': 'alphafold_metric_columns', # Z score normalized, 0 to 1
+            'expression_features': 'expression_feature_columns', # take absolute value, Z score normalized, 0 to 1
+            'ligand_metadata': 'ligand_metadata_columns', # Z score normalized, 0 to 1
+            'spoc_metrics': 'spoc_metric_columns' # Z score normalized, 0 to 1
         }
         
         # Only include active feature groups
@@ -236,6 +220,8 @@ class DataPreprocessor:
         
         # Get the number of samples to keep
         n_known = len(known_pairs)
+        print("Known pairs: ", n_known)
+        print("Unknown pairs: ", len(unknown_pairs))
         
         if split_method == 'umap':
             # Use UMAP coordinates to select well-distributed unknown pairs
@@ -285,10 +271,7 @@ class DataPreprocessor:
         # Combine and shuffle
         balanced_df = pd.concat([known_pairs, unknown_balanced])
         balanced_df = balanced_df.sample(frac=1, random_state=random_state).reset_index(drop=True)
-        
-        # Convert to binary values
-        balanced_df['known_pair'] = (balanced_df['known_pair'] == 'known').astype(int)
-        
+                
         logging.info(f"Balanced dataset: {len(balanced_df)} total pairs")
         logging.info(f"Known pairs: {(balanced_df['known_pair'] == 1).sum()}")
         logging.info(f"Unknown pairs (after balancing): {(balanced_df['known_pair'] == 0).sum()}")
@@ -300,6 +283,39 @@ class DataPreprocessor:
         
         return balanced_df
     
+    def _save_processed_features(self, features: Dict[str, np.ndarray], df: pd.DataFrame, split: str, output_dir: str):
+        """Save processed features to CSV files.
+        
+        Args:
+            features: Dictionary of processed features
+            df: Original dataframe
+            split: Split name (train/valid/test)
+            output_dir: Directory to save files
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save each feature group separately
+        for group_name, feature_array in features.items():
+            if group_name.endswith('_encoded'):
+                # For encoded categorical features, save both encoded and original values
+                cat_col = group_name.replace('_encoded', '')
+                encoded_df = pd.DataFrame({
+                    'original_value': df[cat_col],
+                    'encoded_value': feature_array,
+                    'cleaned_value': df[cat_col].apply(self._clean_text)
+                })
+                encoded_df.to_csv(os.path.join(output_dir, f'{split}_{group_name}.csv'), index=False)
+            else:
+                # For normalized features, get original column names from config
+                if group_name in self._get_column_groups():
+                    columns = self._get_column_groups()[group_name]
+                    feature_df = pd.DataFrame(feature_array, columns=columns)
+                    feature_df.to_csv(os.path.join(output_dir, f'{split}_{group_name}_normalized.csv'), index=False)
+                else:
+                    # For other features (like expression profiles)
+                    feature_df = pd.DataFrame(feature_array)
+                    feature_df.to_csv(os.path.join(output_dir, f'{split}_{group_name}.csv'), index=False)
+
     def preprocess_data(self, 
                        data_path: str,
                        split_method: str = 'umap',
@@ -310,25 +326,6 @@ class DataPreprocessor:
                        filters: Optional[Dict[str, Union[str, List[str], Dict[str, bool]]]] = None) -> Tuple[Dict[str, Dataset], Dict[str, StandardScaler]]:
         """
         Preprocess data and create train/valid/test splits.
-        
-        Args:
-            data_path: Path to input data CSV
-            split_method: Method for splitting unknown pairs ('umap', 'random')
-            test_size: Fraction of data for test set
-            valid_size: Fraction of data for validation set
-            random_state: Random seed
-            feature_groups: Optional dict to override feature group settings from config
-            filters: Optional dict of filter conditions with format:
-                {
-                    'column_equals': {'column_name': 'value'},  # Exact match
-                    'column_in': {'column_name': ['value1', 'value2']},  # Match any in list
-                    'non_nan_columns': ['column1', 'column2'],  # Must have non-NaN values
-                    'all_non_nan_groups': ['group1', 'group2']  # All columns in group must be non-NaN
-                }
-            
-        Returns:
-            datasets: Dict of train/valid/test datasets
-            scalers: Dict of fitted scalers for each feature group
         """
         # Update active feature groups if provided
         if feature_groups is not None:
@@ -345,10 +342,8 @@ class DataPreprocessor:
         
         # Convert known_pair to binary values
         if 'known_pair' in df.columns:
-            # Convert string 'known'/'unknown' to 1/0
             if df['known_pair'].dtype == 'object':
                 df['known_pair'] = (df['known_pair'] == 'known').astype(int)
-            print(df['known_pair'])
             logging.info(f"Converted known_pair to binary values (0/1)")
             logging.info(f"Known pairs (1): {(df['known_pair'] == 1).sum()}")
             logging.info(f"Unknown pairs (0): {(df['known_pair'] == 0).sum()}")
@@ -357,6 +352,34 @@ class DataPreprocessor:
         if filters:
             logging.info("Applying data filters...")
             df = self._apply_filters(df, filters)
+        
+        # Pre-process categorical features before splitting
+        for cat_col in self.config['categorical_columns']:
+            # Clean text
+            df[f'{cat_col}_cleaned'] = df[cat_col].apply(self._clean_text)
+            
+            # Encode categorical values
+            encoder = LabelEncoder()
+            encoded = encoder.fit_transform(df[f'{cat_col}_cleaned'])
+            self.encoders[cat_col] = encoder
+            
+            # Apply Z-score normalization and 0-1 scaling
+            encoded_reshaped = encoded.reshape(-1, 1)
+            z_scaler = StandardScaler()
+            minmax_scaler = MinMaxScaler()
+            normalized = z_scaler.fit_transform(encoded_reshaped)
+            scaled = minmax_scaler.fit_transform(normalized)
+            
+            # Store the scalers
+            self.scalers[f'{cat_col}_z'] = z_scaler
+            self.scalers[f'{cat_col}_minmax'] = minmax_scaler
+            
+            # Store encoded and normalized values
+            df[f'{cat_col}_encoded'] = scaled.ravel()
+            
+            # Log unique categories
+            n_categories = len(encoder.classes_)
+            logging.info(f"Encoded {cat_col} with {n_categories} unique categories")
         
         # Balance the dataset
         df = self.balance_dataset(df, split_method=split_method, random_state=random_state)
@@ -382,41 +405,37 @@ class DataPreprocessor:
         df.loc[valid_idx, 'split'] = 'valid'
         df.loc[test_idx, 'split'] = 'test'
         
-        # Save processed dataset with split labels
-        output_path = Path(data_path).parent / 'processed_features_with_splits.csv'
-        df.to_csv(output_path, index=False)
-        logging.info(f"Saved processed dataset with split labels to {output_path}")
-        
         # Create splits
         train_df = df.iloc[train_idx]
         valid_df = df.iloc[valid_idx]
         test_df = df.iloc[test_idx]
-        
-        # Log split statistics
-        logging.info("\nSplit Statistics:")
-        for split_name, split_df in [('Train', train_df), ('Valid', valid_df), ('Test', test_df)]:
-            n_known = (split_df['known_pair'] == 1).sum()
-            n_unknown = (split_df['known_pair'] == 0).sum()
-            logging.info(f"{split_name} set:")
-            logging.info(f"  Total pairs: {len(split_df)}")
-            logging.info(f"  Known pairs: {n_known}")
-            logging.info(f"  Unknown pairs: {n_unknown}")
-            logging.info(f"  Known/Unknown ratio: {n_known/n_unknown:.2f}")
         
         # Process features for each split
         train_features, train_labels = self._process_split(train_df, is_training=True)
         valid_features, valid_labels = self._process_split(valid_df, is_training=False)
         test_features, test_labels = self._process_split(test_df, is_training=False)
         
+        # Save processed features
+        output_dir = os.path.join(os.path.dirname(data_path), 'processed_features')
+        self._save_processed_features(train_features, train_df, 'train', output_dir)
+        self._save_processed_features(valid_features, valid_df, 'valid', output_dir)
+        self._save_processed_features(test_features, test_df, 'test', output_dir)
+        logging.info(f"Saved processed features to {output_dir}")
+        
+        # Save processed dataset with split labels
+        output_path = os.path.join(os.path.dirname(data_path), 'processed_features_with_splits.csv')
+        df.to_csv(output_path, index=False)
+        logging.info(f"Saved processed dataset with split labels to {output_path}")
+        
         # Create datasets
         datasets = {
-            'train': GPCRDataset(train_features, train_labels, self.active_feature_groups, is_training=True),
-            'valid': GPCRDataset(valid_features, valid_labels, self.active_feature_groups, is_training=False),
-            'test': GPCRDataset(test_features, test_labels, self.active_feature_groups, is_training=False)
+            'train': GPCRDataset(train_features, train_labels, self.active_feature_groups, self.config, is_training=True),
+            'valid': GPCRDataset(valid_features, valid_labels, self.active_feature_groups, self.config, is_training=False),
+            'test': GPCRDataset(test_features, test_labels, self.active_feature_groups, self.config, is_training=False)
         }
         
         return datasets, self.scalers
-    
+
     def _split_by_umap(self, 
                       df: pd.DataFrame,
                       test_size: float,
@@ -424,43 +443,144 @@ class DataPreprocessor:
                       random_state: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Split data using UMAP coordinates to ensure equidistant distribution in each split.
-        Uses KMeans clustering on UMAP coordinates to create well-distributed splits.
+        Combines polar coordinate distribution with cluster awareness.
         """
-        # Get UMAP coordinates for all data
+        from sklearn.cluster import DBSCAN
+        from sklearn.preprocessing import StandardScaler
+        
+        # Get UMAP coordinates
         umap_coords = df[['nmfUMAP1_af_qc', 'nmfUMAP2_af_qc']].values
         
-        # Calculate number of clusters for each split
-        total_clusters = int(1/min(test_size, valid_size))  # Ensure enough clusters for smallest split
-        n_test = int(total_clusters * test_size)
-        n_valid = int(total_clusters * valid_size)
+        # Scale coordinates for DBSCAN
+        scaler = StandardScaler()
+        umap_scaled = scaler.fit_transform(umap_coords)
         
-        # Use KMeans to create well-distributed clusters
-        from sklearn.cluster import KMeans
-        kmeans = KMeans(n_clusters=total_clusters, random_state=random_state)
-        cluster_labels = kmeans.fit_predict(umap_coords)
+        # Identify clusters using DBSCAN
+        dbscan = DBSCAN(eps=0.3, min_samples=5)
+        cluster_labels = dbscan.fit_predict(umap_scaled)
+        n_clusters = len(set(cluster_labels[cluster_labels >= 0]))
+        n_noise = len(cluster_labels[cluster_labels == -1])
         
-        # Assign clusters to splits while maintaining class balance within each cluster
-        unique_clusters = np.unique(cluster_labels)
+        logging.info(f"\nCluster Analysis:")
+        logging.info(f"Found {n_clusters} clusters and {n_noise} noise points")
+        
+        # Calculate cluster sizes and identify small clusters
+        cluster_sizes = {}
+        small_clusters = set()
+        for i in range(-1, max(cluster_labels) + 1):
+            size = np.sum(cluster_labels == i)
+            cluster_sizes[i] = size
+            if size < 10 and i >= 0:  # Don't include noise points (-1)
+                small_clusters.add(i)
+            logging.info(f"Cluster {i}: {size} points")
+        
+        # Calculate target sizes for each split
+        n_total = len(df)
+        n_test = int(n_total * test_size)
+        n_valid = int(n_total * valid_size)
+        n_train = n_total - n_test - n_valid
+        
+        # Normalize UMAP coordinates to [0,1] range
+        umap_min = umap_coords.min(axis=0)
+        umap_max = umap_coords.max(axis=0)
+        umap_range = umap_max - umap_min
+        umap_normalized = (umap_coords - umap_min) / umap_range
+        
+        # Calculate polar coordinates for better spatial distribution
+        center = np.mean(umap_normalized, axis=0)
+        relative_coords = umap_normalized - center
+        angles = np.arctan2(relative_coords[:, 1], relative_coords[:, 0])
+        distances = np.sqrt(np.sum(relative_coords**2, axis=1))
+        
+        # Sort by angle and then by distance for systematic selection
+        sort_idx = np.lexsort((distances, angles))
+        
+        # Initialize arrays for each split
+        test_mask = np.zeros(n_total, dtype=bool)
+        valid_mask = np.zeros(n_total, dtype=bool)
+        
+        # First, handle small clusters
         np.random.seed(random_state)
+        for cluster_idx in small_clusters:
+            cluster_mask = cluster_labels == cluster_idx
+            cluster_points = np.where(cluster_mask)[0]
+            
+            if len(cluster_points) > 0:
+                # Ensure at least one point from small clusters in each split
+                n_points = len(cluster_points)
+                n_per_split = max(1, n_points // 3)
+                
+                # Randomly assign points to splits
+                np.random.shuffle(cluster_points)
+                test_points = cluster_points[:n_per_split]
+                valid_points = cluster_points[n_per_split:2*n_per_split]
+                
+                test_mask[test_points] = True
+                valid_mask[valid_points] = True
+                
+                # Create synthetic points for small clusters
+                points_needed = max(0, 3 - n_points)  # Ensure at least 3 points per split
+                if points_needed > 0:
+                    noise = np.random.normal(0, 0.1, (points_needed, 2))
+                    base_point = umap_coords[cluster_points[0]]
+                    synthetic_points = np.array([base_point + n for n in noise])
+                    umap_coords = np.vstack([umap_coords, synthetic_points])
+                    cluster_labels = np.append(cluster_labels, [cluster_idx] * points_needed)
         
-        # Shuffle clusters
-        np.random.shuffle(unique_clusters)
+        # Remove small cluster points from sort_idx
+        remaining_mask = ~np.isin(sort_idx, np.where(np.isin(cluster_labels, list(small_clusters)))[0])
+        remaining_sort_idx = sort_idx[remaining_mask]
         
-        # Assign clusters to splits
-        test_clusters = unique_clusters[:n_test]
-        valid_clusters = unique_clusters[n_test:n_test + n_valid]
-        train_clusters = unique_clusters[n_test + n_valid:]
+        # Calculate remaining points needed for each split
+        n_test_remaining = n_test - np.sum(test_mask)
+        n_valid_remaining = n_valid - np.sum(valid_mask)
+        total_remaining = n_test_remaining + n_valid_remaining
+        
+        # Distribute remaining points using polar coordinates
+        if total_remaining > 0:
+            step_size = len(remaining_sort_idx) / total_remaining
+            for i in range(total_remaining):
+                idx = remaining_sort_idx[int(i * step_size)]
+                if i < n_test_remaining:
+                    test_mask[idx] = True
+                else:
+                    valid_mask[idx] = True
+        
+        # Remaining points go to train
+        train_mask = ~(test_mask | valid_mask)
         
         # Get indices for each split
-        test_idx = df[np.isin(cluster_labels, test_clusters)].index
-        valid_idx = df[np.isin(cluster_labels, valid_clusters)].index
-        train_idx = df[np.isin(cluster_labels, train_clusters)].index
+        train_idx = df.index[train_mask]
+        valid_idx = df.index[valid_mask]
+        test_idx = df.index[test_mask]
         
-        # Log split sizes
-        logging.info("\nSplit sizes after UMAP-based splitting:")
-        logging.info(f"Train: {len(train_idx)} samples")
-        logging.info(f"Valid: {len(valid_idx)} samples")
-        logging.info(f"Test: {len(test_idx)} samples")
+        # Verify class balance and distribution in each split
+        logging.info("\nSplit distribution:")
+        for split_name, split_idx in [('Train', train_idx), ('test', test_idx), ('valid', valid_idx)]:
+            n_known = (df.loc[split_idx, 'known_pair'] == 1).sum()
+            n_unknown = (df.loc[split_idx, 'known_pair'] == 0).sum()
+            
+            # Calculate UMAP statistics for this split
+            split_coords = umap_coords[np.isin(df.index, split_idx)]
+            umap1_mean = np.mean(split_coords[:, 0])
+            umap2_mean = np.mean(split_coords[:, 1])
+            umap1_std = np.std(split_coords[:, 0])
+            umap2_std = np.std(split_coords[:, 1])
+            
+            # Calculate cluster representation
+            split_clusters = cluster_labels[np.isin(df.index, split_idx)]
+            unique_clusters = len(set(split_clusters[split_clusters >= 0]))
+            small_clusters_represented = len(set(split_clusters) & small_clusters)
+            
+            logging.info(f"\n{split_name} split:")
+            logging.info(f"  Total: {len(split_idx)} samples")
+            logging.info(f"  Known pairs: {n_known}")
+            logging.info(f"  Unknown pairs: {n_unknown}")
+            logging.info(f"  Known ratio: {n_known/len(split_idx):.2f}")
+            logging.info(f"  UMAP1 mean: {umap1_mean:.2f}, std: {umap1_std:.2f}")
+            logging.info(f"  UMAP2 mean: {umap2_mean:.2f}, std: {umap2_std:.2f}")
+            logging.info(f"  Clusters represented: {unique_clusters}/{n_clusters}")
+            logging.info(f"  Small clusters represented: {small_clusters_represented}/{len(small_clusters)}")
         
         return train_idx, valid_idx, test_idx
     
@@ -488,6 +608,14 @@ class DataPreprocessor:
         
         return train_idx, valid_idx, test_idx
     
+    def _clean_text(self, text):
+        """Clean text by removing HTML tags and normalizing whitespace."""
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', str(text))
+        # Normalize whitespace
+        text = ' '.join(text.split())
+        return text
+
     def _process_split(self,
                       df: pd.DataFrame,
                       is_training: bool = False) -> Tuple[Dict[str, np.ndarray], np.ndarray]:
@@ -495,26 +623,45 @@ class DataPreprocessor:
         features = {}
         column_groups = self._get_column_groups()
         
-        # Process each feature group
+        # Process each feature group with appropriate normalization
         for group_name, columns in column_groups.items():
             if group_name in self.active_feature_groups:
-                if is_training:
-                    scaler = StandardScaler()
-                    features[group_name] = scaler.fit_transform(df[columns])
-                    self.scalers[group_name] = scaler
+                feature_data = df[columns].values
+                
+                if group_name in ['residue_contacts', 'ligand_contact_sum', 'ligand_contact_indiv']:
+                    # No normalization needed, already 0-1
+                    features[group_name] = feature_data
+                
+                elif group_name == 'expression_features':
+                    # Take absolute value, then Z-score normalize and scale to 0-1
+                    feature_data = np.abs(feature_data)
+                    if is_training:
+                        z_scaler = StandardScaler()
+                        minmax_scaler = MinMaxScaler()
+                        normalized = z_scaler.fit_transform(feature_data)
+                        features[group_name] = minmax_scaler.fit_transform(normalized)
+                        self.scalers[f'{group_name}_z'] = z_scaler
+                        self.scalers[f'{group_name}_minmax'] = minmax_scaler
+                    else:
+                        normalized = self.scalers[f'{group_name}_z'].transform(feature_data)
+                        features[group_name] = self.scalers[f'{group_name}_minmax'].transform(normalized)
+                
                 else:
-                    features[group_name] = self.scalers[group_name].transform(df[columns])
+                    # Z-score normalize and scale to 0-1 for all other features
+                    if is_training:
+                        z_scaler = StandardScaler()
+                        minmax_scaler = MinMaxScaler()
+                        normalized = z_scaler.fit_transform(feature_data)
+                        features[group_name] = minmax_scaler.fit_transform(normalized)
+                        self.scalers[f'{group_name}_z'] = z_scaler
+                        self.scalers[f'{group_name}_minmax'] = minmax_scaler
+                    else:
+                        normalized = self.scalers[f'{group_name}_z'].transform(feature_data)
+                        features[group_name] = self.scalers[f'{group_name}_minmax'].transform(normalized)
         
-        # Process categorical features
-        if 'receptor_metadata' in self.active_feature_groups:
-            for cat_col in self.config['categorical_columns']:
-                if is_training:
-                    encoder = LabelEncoder()
-                    encoded = encoder.fit_transform(df[cat_col])
-                    self.encoders[cat_col] = encoder
-                else:
-                    encoded = self.encoders[cat_col].transform(df[cat_col])
-                features[f'{cat_col}_encoded'] = encoded
+        # Get categorical features that were already encoded
+        for cat_col in self.config['categorical_columns']:
+            features[f'{cat_col}_encoded'] = df[f'{cat_col}_encoded'].values
         
         # Process expression profiles if enabled
         if 'expression_profiles' in self.active_feature_groups:
@@ -531,19 +678,32 @@ class DataPreprocessor:
             ])
             
             if is_training:
-                # Fit scalers on training data
-                receptor_scaler = StandardScaler()
-                ligand_scaler = StandardScaler()
+                # Z-score normalize and scale to 0-1
+                receptor_z_scaler = StandardScaler()
+                receptor_minmax_scaler = MinMaxScaler()
+                ligand_z_scaler = StandardScaler()
+                ligand_minmax_scaler = MinMaxScaler()
                 
-                features['receptor_expression'] = receptor_scaler.fit_transform(receptor_profiles)
-                features['ligand_expression'] = ligand_scaler.fit_transform(ligand_profiles)
+                # Normalize receptor profiles
+                normalized_receptor = receptor_z_scaler.fit_transform(receptor_profiles)
+                features['receptor_expression'] = receptor_minmax_scaler.fit_transform(normalized_receptor)
                 
-                self.scalers['receptor_expression'] = receptor_scaler
-                self.scalers['ligand_expression'] = ligand_scaler
+                # Normalize ligand profiles
+                normalized_ligand = ligand_z_scaler.fit_transform(ligand_profiles)
+                features['ligand_expression'] = ligand_minmax_scaler.fit_transform(normalized_ligand)
+                
+                # Store scalers
+                self.scalers['receptor_expression_z'] = receptor_z_scaler
+                self.scalers['receptor_expression_minmax'] = receptor_minmax_scaler
+                self.scalers['ligand_expression_z'] = ligand_z_scaler
+                self.scalers['ligand_expression_minmax'] = ligand_minmax_scaler
             else:
                 # Transform using fitted scalers
-                features['receptor_expression'] = self.scalers['receptor_expression'].transform(receptor_profiles)
-                features['ligand_expression'] = self.scalers['ligand_expression'].transform(ligand_profiles)
+                normalized_receptor = self.scalers['receptor_expression_z'].transform(receptor_profiles)
+                features['receptor_expression'] = self.scalers['receptor_expression_minmax'].transform(normalized_receptor)
+                
+                normalized_ligand = self.scalers['ligand_expression_z'].transform(ligand_profiles)
+                features['ligand_expression'] = self.scalers['ligand_expression_minmax'].transform(normalized_ligand)
         
         # Get labels
         labels = df['known_pair'].values
