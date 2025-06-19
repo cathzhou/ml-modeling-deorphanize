@@ -1,0 +1,35 @@
+{
+  "os":  "macOS-15.3.2-x86_64-i386-64bit",
+  "python":  "CPython 3.10.0",
+  "startedAt":  "2025-06-16T16:04:31.401276Z",
+  "program":  "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py",
+  "codePath":  "model_training/train.py",
+  "git":  {
+    "remote":  "git@github.com:cathzhou/ml-modeling-deorphanize.git",
+    "commit":  "2f35cf4b5a48e3612a4d216851aa026f7acfdcdb"
+  },
+  "email":  "catherineyaozhou@gmail.com",
+  "root":  "/Users/catherinez/VSC/ml-modeling-deorphanize",
+  "host":  "CatherineZ-MBP-7.local",
+  "executable":  "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/bin/python",
+  "codePathLocal":  "model_training/train.py",
+  "cpu_count":  8,
+  "cpu_count_logical":  16,
+  "disk":  {
+    "/":  {
+      "total":  "4001907707904",
+      "used":  "2304467398656"
+    },
+    "/System/Volumes/Data":  {
+      "total":  "4001907707904",
+      "used":  "2304467398656"
+    }
+  },
+  "memory":  {
+    "total":  "68719476736"
+  },
+  "cpu":  {
+    "count":  8,
+    "countLogical":  16
+  }
+}

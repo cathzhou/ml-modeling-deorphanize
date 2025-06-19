@@ -1,0 +1,28 @@
+Traceback (most recent call last):
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 264, in <module>
+    main()
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 261, in main
+    run_training(model_config_path, data_config_path)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 238, in run_training
+    trainer.train(train_loader, valid_loader)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 85, in train
+    for batch in train_loader:
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 631, in __next__
+    data = self._next_data()
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1346, in _next_data
+    return self._process_data(data)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1372, in _process_data
+    data.reraise()
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/torch/_utils.py", line 722, in reraise
+    raise exception
+TypeError: Caught TypeError in DataLoader worker process 0.
+Original Traceback (most recent call last):
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/torch/utils/data/_utils/worker.py", line 308, in _worker_loop
+    data = fetcher.fetch(index)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 51, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 51, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/data_preprocessing.py", line 74, in __getitem__
+    feature_dict[f'{cat_col}_encoded'] = torch.FloatTensor(feature_data)
+TypeError: new(): data must be a sequence (got numpy.float64)

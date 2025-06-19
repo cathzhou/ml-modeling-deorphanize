@@ -1,0 +1,16 @@
+{"time":"2025-06-17T00:04:31.403459+08:00","level":"INFO","msg":"stream: starting","core version":"0.20.1","symlink path":"/Users/catherinez/VSC/ml-modeling-deorphanize/wandb/run-20250617_000429-zd37fvtr/logs/debug-core.log"}
+{"time":"2025-06-17T00:04:31.429977+08:00","level":"ERROR","msg":"monitor: failed to initialize GPU asset: monitor: could not start GPU binary: fork/exec /Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/wandb/bin/gpu_stats: bad CPU type in executable"}
+{"time":"2025-06-17T00:04:31.970615+08:00","level":"INFO","msg":"stream: created new stream","id":"zd37fvtr"}
+{"time":"2025-06-17T00:04:31.970678+08:00","level":"INFO","msg":"stream: started","id":"zd37fvtr"}
+{"time":"2025-06-17T00:04:31.970688+08:00","level":"INFO","msg":"handler: started","stream_id":"zd37fvtr"}
+{"time":"2025-06-17T00:04:31.9707+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"zd37fvtr"}
+{"time":"2025-06-17T00:04:31.970749+08:00","level":"INFO","msg":"sender: started","stream_id":"zd37fvtr"}
+{"time":"2025-06-17T00:04:32.318022+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-06-17T00:05:15.578612+08:00","level":"INFO","msg":"stream: closing","id":"zd37fvtr"}
+{"time":"2025-06-17T00:05:15.578675+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-06-17T00:05:15.578752+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-06-17T00:05:16.37013+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-06-17T00:05:16.940182+08:00","level":"INFO","msg":"handler: closed","stream_id":"zd37fvtr"}
+{"time":"2025-06-17T00:05:16.940241+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"zd37fvtr"}
+{"time":"2025-06-17T00:05:16.940254+08:00","level":"INFO","msg":"sender: closed","stream_id":"zd37fvtr"}
+{"time":"2025-06-17T00:05:16.940681+08:00","level":"INFO","msg":"stream: closed","id":"zd37fvtr"}

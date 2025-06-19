@@ -1,0 +1,18 @@
+{"time":"2025-06-17T00:43:22.618768+08:00","level":"INFO","msg":"stream: starting","core version":"0.20.1","symlink path":"/Users/catherinez/VSC/ml-modeling-deorphanize/wandb/run-20250617_004321-mdbwmeke/logs/debug-core.log"}
+{"time":"2025-06-17T00:43:22.640503+08:00","level":"ERROR","msg":"monitor: failed to initialize GPU asset: monitor: could not start GPU binary: fork/exec /Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/wandb/bin/gpu_stats: bad CPU type in executable"}
+{"time":"2025-06-17T00:43:24.722747+08:00","level":"INFO","msg":"stream: created new stream","id":"mdbwmeke"}
+{"time":"2025-06-17T00:43:24.722809+08:00","level":"INFO","msg":"stream: started","id":"mdbwmeke"}
+{"time":"2025-06-17T00:43:24.722894+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"mdbwmeke"}
+{"time":"2025-06-17T00:43:24.723339+08:00","level":"INFO","msg":"sender: started","stream_id":"mdbwmeke"}
+{"time":"2025-06-17T00:43:24.723686+08:00","level":"INFO","msg":"handler: started","stream_id":"mdbwmeke"}
+{"time":"2025-06-17T00:43:25.754238+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-06-17T00:43:51.751105+08:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/catherineyzhou-stanford-university/gpcr-binding-prediction/mdbwmeke/file_stream\": EOF"}
+{"time":"2025-06-17T00:44:20.071146+08:00","level":"INFO","msg":"stream: closing","id":"mdbwmeke"}
+{"time":"2025-06-17T00:44:20.07201+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-06-17T00:44:20.072077+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-06-17T00:44:21.838946+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-06-17T00:44:26.84499+08:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/catherineyzhou-stanford-university/gpcr-binding-prediction/mdbwmeke/file_stream\": EOF"}
+{"time":"2025-06-17T00:44:30.862096+08:00","level":"INFO","msg":"sender: closed","stream_id":"mdbwmeke"}
+{"time":"2025-06-17T00:44:30.863003+08:00","level":"INFO","msg":"handler: closed","stream_id":"mdbwmeke"}
+{"time":"2025-06-17T00:44:30.863002+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"mdbwmeke"}
+{"time":"2025-06-17T00:44:30.863112+08:00","level":"INFO","msg":"stream: closed","id":"mdbwmeke"}

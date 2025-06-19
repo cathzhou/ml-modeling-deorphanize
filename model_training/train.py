@@ -10,71 +10,57 @@ import json
 from pathlib import Path
 from typing import Dict, List, Tuple
 import wandb
+from datetime import datetime
 
 from model import GPCRBindingPredictor
-from data_preprocessing import DataPreprocessor, create_data_loaders
+from data_preprocessing import DataPreprocessor
 
-class FocalLoss(nn.Module):
-    """Focal Loss for handling class imbalance."""
-    
-    def __init__(self, alpha: float = 0.25, gamma: float = 2.0):
-        super().__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-        pt = torch.exp(-bce_loss)
-        focal_loss = self.alpha * (1-pt)**self.gamma * bce_loss
-        return focal_loss.mean()
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 class Trainer:
     """Handles model training and evaluation."""
     
-    def __init__(self, config_path: str = 'model_training/config.json'):
+    def __init__(self, config: dict):
         """
         Args:
-            config_path: Path to configuration file
+            config: Configuration dictionary containing model parameters
         """
-        self.config = self._load_config(config_path)
+        self.config = config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # Initialize wandb
         wandb.init(
             project="gpcr-binding-prediction",
-            config=self.config
+            name=f"{config['name']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            config=config
         )
         
         # Create model
-        self.model = GPCRBindingPredictor(self.config).to(self.device)
+        self.model = GPCRBindingPredictor(config).to(self.device)
         wandb.watch(self.model)
         
         # Setup loss and optimizer
-        self.criterion = FocalLoss(
-            alpha=0.25,  # Can be tuned
-            gamma=2.0    # Can be tuned
-        )
+        self.criterion = nn.BCELoss()
         
         self.optimizer = optim.AdamW(
             self.model.parameters(),
-            lr=self.config['model_params']['learning_rate'],
-            weight_decay=self.config['model_params']['weight_decay']
+            lr=config['model_params']['learning_rate'],
+            weight_decay=config['model_params']['weight_decay']
         )
         
         # Create checkpoint directory
         self.checkpoint_dir = Path('model_training/checkpoints')
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
-    def _load_config(self, config_path: str) -> dict:
-        """Load configuration file."""
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-        return config
-    
     def train(self, train_loader: DataLoader, valid_loader: DataLoader) -> None:
         """Train the model."""
         n_epochs = self.config['model_params']['max_epochs']
         patience = self.config['model_params']['early_stopping_patience']
+        warmup_steps = self.config['model_params'].get('warmup_steps', 1000)
         
         # Setup learning rate scheduler
         scheduler = OneCycleLR(
@@ -82,7 +68,7 @@ class Trainer:
             max_lr=self.config['model_params']['learning_rate'],
             epochs=n_epochs,
             steps_per_epoch=len(train_loader),
-            pct_start=0.3,
+            pct_start=warmup_steps / (n_epochs * len(train_loader)),
             anneal_strategy='cos'
         )
         
@@ -98,8 +84,9 @@ class Trainer:
             
             for batch in train_loader:
                 # Move batch to device
-                batch_inputs = {k: v.to(self.device) for k, v in batch[0].items()}
-                targets = batch[1].to(self.device)
+                features, targets = batch
+                batch_inputs = {k: v.to(self.device) for k, v in features.items()}
+                targets = targets.to(self.device)
                 
                 # Forward pass
                 self.optimizer.zero_grad()
@@ -161,8 +148,9 @@ class Trainer:
         with torch.no_grad():
             for batch in loader:
                 # Move batch to device
-                batch_inputs = {k: v.to(self.device) for k, v in batch[0].items()}
-                targets = batch[1].to(self.device)
+                features, targets = batch
+                batch_inputs = {k: v.to(self.device) for k, v in features.items()}
+                targets = targets.to(self.device)
                 
                 # Forward pass
                 outputs = self.model(batch_inputs)
@@ -202,47 +190,63 @@ class Trainer:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-def main():
-    # Set up logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+def run_training(model_config_path: str, data_config_path: str) -> None:
+    """Run training with the given configuration files.
     
-    # Load config
-    with open('model_training/config.json', 'r') as f:
-        config = json.load(f)
+    Args:
+        model_config_path: Path to model configuration file
+        data_config_path: Path to data configuration file
+    """
+    # Load configs
+    with open(model_config_path) as f:
+        model_config = json.load(f)
     
-    # Create data preprocessor and load data
-    preprocessor = DataPreprocessor(config_path='model_training/config.json')
-    datasets, scalers = preprocessor.preprocess_data(
-        data_path='data/processed_features.csv',
-        split_method='umap',
-        test_size=config['data_params']['test_size'],
-        valid_size=config['data_params']['valid_size']
+    # Initialize preprocessor and get datasets
+    preprocessor = DataPreprocessor(data_config_path, model_config_path)
+    datasets, _ = preprocessor.preprocess_data(
+        split_method=model_config.get('split_method', 'random')
     )
     
     # Create data loaders
-    loaders = create_data_loaders(
-        datasets,
-        batch_size=config['model_params']['batch_size'],
-        num_workers=config['data_params']['num_workers']
+    batch_size = model_config['model_params']['batch_size']
+    num_workers = model_config['data_params'].get('num_workers', 4)
+    
+    train_loader = DataLoader(
+        datasets['train'],
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    valid_loader = DataLoader(
+        datasets['valid'],
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    test_loader = DataLoader(
+        datasets['test'],
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
     )
     
     # Initialize trainer and train model
-    trainer = Trainer(config_path='model_training/config.json')
-    trainer.train(loaders['train'], loaders['valid'])
+    trainer = Trainer(model_config)
+    trainer.train(train_loader, valid_loader)
     
     # Evaluate on test set
-    test_loss, test_metrics = trainer.evaluate(loaders['test'])
-    logging.info("Test Set Results:")
+    test_loss, test_metrics = trainer.evaluate(test_loader)
+    logging.info("\nTest Set Results:")
     logging.info(f"Loss: {test_loss:.4f}")
     logging.info(f"AUROC: {test_metrics['auroc']:.4f}")
     logging.info(f"AUPRC: {test_metrics['auprc']:.4f}")
     logging.info(f"Precision: {test_metrics['precision']:.4f}")
     logging.info(f"F1: {test_metrics['f1']:.4f}")
     
-    # Log final test metrics to wandb
+    # Log test metrics to wandb
     wandb.log({
         'test_loss': test_loss,
         'test_auroc': test_metrics['auroc'],
@@ -251,5 +255,10 @@ def main():
         'test_f1': test_metrics['f1']
     })
 
-if __name__ == "__main__":
+def main():
+    model_config_path = 'model_training/model_config/train_config_umap.json'
+    data_config_path = 'model_training/data_config.json'
+    run_training(model_config_path, data_config_path)
+
+if __name__ == '__main__':
     main() 

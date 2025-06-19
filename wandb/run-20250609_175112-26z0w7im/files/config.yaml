@@ -1,0 +1,56 @@
+_wandb:
+    value:
+        cli_version: 0.20.1
+        m: []
+        python_version: 3.10.0
+        t:
+            "1":
+                - 1
+                - 5
+                - 53
+            "2":
+                - 1
+                - 5
+                - 53
+            "3":
+                - 13
+                - 16
+                - 55
+            "4": 3.10.0
+            "5": 0.20.1
+            "12": 0.20.1
+            "13": darwin-x86_64
+categorical_columns:
+    value:
+        - 'gpcrdb: subfamily'
+        - lig1_end
+feature_groups:
+    value:
+        alphafold_metrics: true
+        distance_metrics: true
+        expression_features: true
+        ligand_contact_indiv: true
+        ligand_contact_sum: true
+        ligand_metadata: true
+        residue_contacts: true
+filters:
+    value:
+        column_equals:
+            lig1_location: E
+        non_nan_columns:
+            - nmfUMAP1_af_qc
+            - nmfUMAP2_af_qc
+model_params:
+    value:
+        batch_size: 32
+        d_ff: 1024
+        d_model: 256
+        dropout: 0.1
+        early_stopping_patience: 10
+        learning_rate: 0.0001
+        max_epochs: 100
+        n_heads: 8
+        n_layers: 4
+        weight_decay: 0.01
+name:
+    value: extracellular

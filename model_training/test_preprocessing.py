@@ -14,162 +14,104 @@ logging.basicConfig(
 )
 
 def run_preprocessing_test(
-    data_path: str,
-    output_dir: str,
-    test_name: str,
-    filters: Optional[Dict] = None,
-    feature_groups: Optional[Dict[str, bool]] = None,
-    split_method: str = 'umap',
-    test_size: float = 0.1,
-    valid_size: float = 0.1
+    data_config_path: str,
+    model_config_path: str,
+    output_dir: str
 ) -> None:
     """
-    Run preprocessing with specified filters and save results.
+    Run preprocessing with specified config files and save results.
     
     Args:
-        data_path: Path to input data CSV
+        data_config_path: Path to data configuration file
+        model_config_path: Path to model configuration file  
         output_dir: Directory to save results
-        test_name: Name of this test configuration
-        filters: Optional dictionary of filters to apply
-        feature_groups: Optional dictionary to override feature group settings
-        split_method: Method for splitting data ('umap' or 'random')
-        test_size: Fraction of data for test set
-        valid_size: Fraction of data for validation set
     """
+    # Load model config to get test name
+    with open(model_config_path, 'r') as f:
+        model_config = json.load(f)
+    
+    test_name = model_config['name']
+    
     # Create output directory
     test_dir = os.path.join(output_dir, test_name)
     os.makedirs(test_dir, exist_ok=True)
     
-    # Initialize preprocessor
-    preprocessor = DataPreprocessor()
-    
-    # Save test configuration
-    config = {
-        'test_name': test_name,
-        'filters': filters,
-        'feature_groups': feature_groups,
-        'split_method': split_method,
-        'test_size': test_size,
-        'valid_size': valid_size,
-        'timestamp': datetime.now().isoformat()
-    }
-    
-    with open(os.path.join(test_dir, 'test_config.json'), 'w') as f:
-        json.dump(config, f, indent=2)
-    
+    # Initialize preprocessor with config files
+    preprocessor = DataPreprocessor(data_config_path, model_config_path)
+
     # Run preprocessing
-    logging.info(f"\nRunning test: {test_name}")
-    if filters:
-        logging.info("Filters:")
-        for k, v in filters.items():
-            logging.info(f"  {k}: {v}")
+    logging.info(f"\n{'='*60}")
+    logging.info(f"Running test: {test_name}")
+    logging.info(f"Data config: {data_config_path}")
+    logging.info(f"Model config: {model_config_path}")
+    logging.info(f"Split method: {model_config['data_params'].get('split_method', 'random')}")
     
     # Load raw data first to check initial state
+    data_path = model_config['data_path']
     df = pd.read_csv(data_path)
     logging.info(f"Initial data shape: {df.shape}")
     logging.info(f"Initial known pairs: {(df['known_pair'] == 'known').sum()}")
     logging.info(f"Initial unknown pairs: {(df['known_pair'] == 'unknown').sum()}")
     
-    if filters and 'column_equals' in filters:
-        for col, val in filters['column_equals'].items():
-            count = (df[col] == val).sum()
-            logging.info(f"Rows matching {col} == {val}: {count}")
+    # Check for afpd_dir_name to verify pair structure
+    if 'afpd_dir_name' in df.columns:
+        unique_pairs = df['afpd_dir_name'].nunique()
+        avg_models_per_pair = len(df) / unique_pairs
+        logging.info(f"Number of unique pairs: {unique_pairs}")
+        logging.info(f"Average models per pair: {avg_models_per_pair:.1f}")
     
-    datasets, _ = preprocessor.preprocess_data(
-        data_path=data_path,
-        split_method=split_method,
-        test_size=test_size,
-        valid_size=valid_size,
-        filters=filters,
-        feature_groups=feature_groups
-    )
+    # Show filters being applied
+    filters = model_config.get('filters')
+    if filters:
+        logging.info("Filters applied:")
+        if 'column_equals' in filters:
+            for col, val in filters['column_equals'].items():
+                count = (df[col] == val).sum()
+                logging.info(f"  {col} == {val}: {count} rows")
+        if 'non_nan_columns' in filters:
+            logging.info(f"  Non-NaN required: {filters['non_nan_columns']}")
     
-    # Save processed data
-    processed_path = Path(data_path).parent / 'processed_features_with_splits.csv'
-    if processed_path.exists():
-        df = pd.read_csv(processed_path)
-        output_path = os.path.join(test_dir, 'processed_features.csv')
-        df.to_csv(output_path, index=False)
-        logging.info(f"Saved processed features to: {output_path}")
-        
-        # Save split-specific CSVs
-        for split in ['train', 'valid', 'test']:
-            split_df = df[df['split'] == split]
-            split_path = os.path.join(test_dir, f'{split}_set.csv')
-            split_df.to_csv(split_path, index=False)
-            logging.info(f"Saved {split} set to: {split_path}")
-            
-        # Generate summary statistics
-        summary = {
-            'total_samples': len(df),
-            'known_pairs': (df['known_pair'] == 1).sum(),
-            'unknown_pairs': (df['known_pair'] == 0).sum(),
-            'splits': {
-                split: {
-                    'total': len(df[df['split'] == split]),
-                    'known': len(df[(df['split'] == split) & (df['known_pair'] == 1)]),
-                    'unknown': len(df[(df['split'] == split) & (df['known_pair'] == 0)])
-                }
-                for split in ['train', 'valid', 'test']
-            }
-        }
-        
-        # Add location statistics if available
-        if 'lig1_location' in df.columns:
-            summary['location_distribution'] = df['lig1_location'].value_counts().to_dict()
-        
-        # Save summary
-        #with open(os.path.join(test_dir, 'summary_stats.json'), 'w') as f:
-        #    json.dump(summary, f, indent=2)
-            
-        logging.info("\nSummary Statistics:")
-        logging.info(f"Total samples: {summary['total_samples']}")
-        logging.info(f"Known pairs: {summary['known_pairs']}")
-        logging.info(f"Unknown pairs: {summary['unknown_pairs']}")
-        for split, stats in summary['splits'].items():
-            logging.info(f"\n{split.capitalize()} set:")
-            logging.info(f"  Total: {stats['total']}")
-            logging.info(f"  Known: {stats['known']}")
-            logging.info(f"  Unknown: {stats['unknown']}")
+    # Show active feature groups
+    active_features = [k for k, v in model_config['feature_groups'].items() if v]
+    logging.info(f"Active feature groups: {active_features}")
+    
+    # Run preprocessing using the config file settings
+    try:
+        datasets, scalers = preprocessor.preprocess_data()
+        logging.info("✓ Preprocessing completed successfully")
+    except Exception as e:
+        logging.error(f"✗ Preprocessing failed: {e}")
+        return
 
 def main():
     # Define paths
-    data_path = "data/bm_update_3_subset_lig_features_coexpression.csv"
+    data_config_path = "model_training/data_config.json"
     output_dir = "data/preprocessing_tests"
     
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
-    # Example test configurations
-    test_configs = [
-        {
-            'name': 'extracellular',
-            'filters': {
-                'column_equals': {'lig1_location': 'E'},
-                'non_nan_columns': ['nmfUMAP1_af_qc', 'nmfUMAP2_af_qc']
-            },
-            'feature_groups': {
-                'residue_contacts': True,
-                'distance_metrics': True,
-                'ligand_contact_sum': True,
-                'ligand_contact_indiv': True,
-                'alphafold_metrics': True,
-                'expression_features': True,
-                'ligand_metadata': True
-            }
-        }
-    ]
+    # Get all config files from model_config directory
+    model_config_dir = "model_training/model_config"
+    #config_files = [f for f in os.listdir(model_config_dir) if f.endswith('.json')]
+    config_files = ['train_config_extracellular_random.json']
     
-    # Run all test configurations
-    for config in test_configs:
+    logging.info(f"Found {len(config_files)} config files to test:")
+    for config_file in config_files:
+        logging.info(f"  - {config_file}")
+    
+    # Run preprocessing for each config file
+    for config_file in sorted(config_files):
+        model_config_path = os.path.join(model_config_dir, config_file)
         run_preprocessing_test(
-            data_path=data_path,
-            output_dir=output_dir,
-            test_name=config['name'],
-            filters=config.get('filters'),
-            feature_groups=config.get('feature_groups'),
-            split_method=config.get('split_method', 'umap')
+            data_config_path=data_config_path,
+            model_config_path=model_config_path,
+            output_dir=output_dir
         )
+    
+    logging.info(f"\n{'='*60}")
+    logging.info("All preprocessing tests completed!")
+    logging.info(f"Results saved in: {output_dir}")
 
 if __name__ == "__main__":
     main() 

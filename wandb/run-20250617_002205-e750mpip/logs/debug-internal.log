@@ -1,0 +1,17 @@
+{"time":"2025-06-17T00:22:06.060172+08:00","level":"INFO","msg":"stream: starting","core version":"0.20.1","symlink path":"/Users/catherinez/VSC/ml-modeling-deorphanize/wandb/run-20250617_002205-e750mpip/logs/debug-core.log"}
+{"time":"2025-06-17T00:22:06.082512+08:00","level":"ERROR","msg":"monitor: failed to initialize GPU asset: monitor: could not start GPU binary: fork/exec /Users/catherinez/VSC/ml-modeling-deorphanize/venv/lib/python3.10/site-packages/wandb/bin/gpu_stats: bad CPU type in executable"}
+{"time":"2025-06-17T00:22:06.647642+08:00","level":"INFO","msg":"stream: created new stream","id":"e750mpip"}
+{"time":"2025-06-17T00:22:06.647734+08:00","level":"INFO","msg":"stream: started","id":"e750mpip"}
+{"time":"2025-06-17T00:22:06.647749+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"e750mpip"}
+{"time":"2025-06-17T00:22:06.647726+08:00","level":"INFO","msg":"handler: started","stream_id":"e750mpip"}
+{"time":"2025-06-17T00:22:06.64776+08:00","level":"INFO","msg":"sender: started","stream_id":"e750mpip"}
+{"time":"2025-06-17T00:22:07.056672+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-06-17T00:22:38.520518+08:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/catherineyzhou-stanford-university/gpcr-binding-prediction/e750mpip/file_stream\": EOF"}
+{"time":"2025-06-17T00:22:59.368712+08:00","level":"INFO","msg":"stream: closing","id":"e750mpip"}
+{"time":"2025-06-17T00:22:59.368759+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-06-17T00:22:59.368806+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-06-17T00:23:01.116352+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-06-17T00:23:01.720658+08:00","level":"INFO","msg":"handler: closed","stream_id":"e750mpip"}
+{"time":"2025-06-17T00:23:01.720686+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"e750mpip"}
+{"time":"2025-06-17T00:23:01.720715+08:00","level":"INFO","msg":"sender: closed","stream_id":"e750mpip"}
+{"time":"2025-06-17T00:23:01.721046+08:00","level":"INFO","msg":"stream: closed","id":"e750mpip"}

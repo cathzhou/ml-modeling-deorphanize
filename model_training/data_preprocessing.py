@@ -10,6 +10,7 @@ from typing import Dict, List, Tuple, Optional, Set, Union
 import json
 import os
 import re
+import matplotlib.pyplot as plt
 
 # Set up logging
 logging.basicConfig(
@@ -24,7 +25,8 @@ class GPCRDataset(Dataset):
                  features: Dict[str, np.ndarray],
                  labels: np.ndarray,
                  active_feature_groups: Set[str],
-                 config: Dict,
+                 data_config: Dict,
+                 codes: Optional[np.ndarray] = None,
                  is_training: bool = True):
         """Initialize dataset.
         
@@ -32,13 +34,15 @@ class GPCRDataset(Dataset):
             features: Dictionary of feature arrays
             labels: Array of labels
             active_feature_groups: Set of active feature groups
-            config: Model configuration dictionary
+            data_config: Data configuration dictionary
+            codes: Optional array of code identifiers
             is_training: Whether this is training data
         """
         self.features = features
         self.labels = labels
         self.active_feature_groups = active_feature_groups
-        self.config = config
+        self.data_config = data_config
+        self.codes = codes
         self.is_training = is_training
         
     def __len__(self):
@@ -50,39 +54,68 @@ class GPCRDataset(Dataset):
         
         # Get standard feature groups
         for group in self.active_feature_groups:
-            feature_dict[group] = torch.FloatTensor(self.features[group][idx])
+            if group in self.features:
+                feature_data = self.features[group][idx]
+                if isinstance(feature_data, (list, np.ndarray)):
+                    feature_data = np.array(feature_data)
+                # Ensure 2D array for tensor conversion
+                if feature_data.ndim == 1:
+                    feature_data = feature_data.reshape(1, -1)
+                feature_dict[group] = torch.FloatTensor(feature_data)
         
         # Get individual categorical features
-        for cat_col in self.config['categorical_columns']:
-            feature_dict[f'{cat_col}_encoded'] = torch.LongTensor([self.features[f'{cat_col}_encoded'][idx]])
+        for cat_col in self.data_config['categorical_columns']:
+            if f'{cat_col}_encoded' in self.features:
+                feature_data = self.features[f'{cat_col}_encoded'][idx]
+                # Convert single float to array
+                if isinstance(feature_data, (float, np.float64)):
+                    feature_data = np.array([feature_data])
+                elif isinstance(feature_data, (list, np.ndarray)):
+                    feature_data = np.array(feature_data)
+                # Ensure 2D array for tensor conversion
+                if feature_data.ndim == 1:
+                    feature_data = feature_data.reshape(1, -1)
+                feature_dict[f'{cat_col}_encoded'] = torch.FloatTensor(feature_data)
         
         # Get label
         label = torch.FloatTensor([self.labels[idx]])
+        
+        # Get code if available
+        if self.codes is not None:
+            feature_dict['code'] = self.codes[idx]
         
         return feature_dict, label
 
 class DataPreprocessor:
     """Handles data preprocessing for GPCR-Ligand binding prediction."""
     
-    def __init__(self, config_path: str = 'model_training/config.json'):
+    def __init__(self, data_config_path: str, model_config_path: str):
         """
         Args:
-            config_path: Path to configuration file
+            data_config_path: Path to data configuration file containing column mappings
+            model_config_path: Path to model configuration file containing model and training parameters
         """
-        self.config = self._load_config(config_path)
+        self.data_config = self._load_data_config(data_config_path)
+        self.model_config = self._load_model_config(model_config_path)
         self.scalers = {}
         self.encoders = {}
         self.expression_cache = {}
         self.active_feature_groups = {
-            group for group, active in self.config['feature_groups'].items() 
+            group for group, active in self.model_config['feature_groups'].items() 
             if active
         }
         logging.info("Active feature groups:")
         for group in sorted(self.active_feature_groups):
             logging.info(f"  - {group}")
         
-    def _load_config(self, config_path: str) -> dict:
-        """Load configuration file."""
+    def _load_data_config(self, config_path: str) -> dict:
+        """Load data configuration file containing column mappings."""
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        return config
+    
+    def _load_model_config(self, config_path: str) -> dict:
+        """Load model configuration file containing model and training parameters."""
         with open(config_path, 'r') as f:
             config = json.load(f)
         return config
@@ -107,8 +140,8 @@ class DataPreprocessor:
         for group in self.active_feature_groups:
             if group in group_to_config:
                 config_key = group_to_config[group]
-                if config_key in self.config:
-                    column_groups[group] = self.config[config_key]
+                if config_key in self.data_config:
+                    column_groups[group] = self.data_config[config_key]
                 else:
                     logging.warning(f"Config key '{config_key}' not found for feature group '{group}'")
         
@@ -203,86 +236,258 @@ class DataPreprocessor:
         
         return filtered_df
     
-    def balance_dataset(self, df: pd.DataFrame, split_method: str = 'umap', random_state: int = 42) -> pd.DataFrame:
+    def balance_and_split_dataset(self, df: pd.DataFrame, split_method: str = 'cluster', test_size: float = 0.2, valid_size: float = 0.1, random_state: int = 42) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        Balance the dataset by downsampling the majority class (unknown pairs).
-        For UMAP method, selects unknown pairs that are well-distributed in UMAP space.
-        For random method, uses random selection.
+        Balance the dataset and create train/valid/test splits in a single operation.
+        Ensures all models with the same afpd_dir_name stay in the same split.
         
         Args:
             df: Input DataFrame
-            split_method: Method for selecting unknown pairs ('umap' or 'random')
+            split_method: Method for splitting ('cluster' or 'random_balanced')
+            test_size: Proportion of data for test set
+            valid_size: Proportion of data for validation set
             random_state: Random seed
+            
+        Returns:
+            Tuple of (train_df, valid_df, test_df)
         """
-        known_pairs = df[df['known_pair'] == 1]
-        unknown_pairs = df[df['known_pair'] == 0]
-        print(unknown_pairs)
+        np.random.seed(random_state)
         
-        # Get the number of samples to keep
-        n_known = len(known_pairs)
-        print("Known pairs: ", n_known)
-        print("Unknown pairs: ", len(unknown_pairs))
+        # Validate required columns
+        if 'afpd_dir_name' not in df.columns:
+            raise ValueError("Column 'afpd_dir_name' not found in dataframe")
         
-        if split_method == 'umap':
-            # Use UMAP coordinates to select well-distributed unknown pairs
-            umap_coords = unknown_pairs[['nmfUMAP1_af_qc', 'nmfUMAP2_af_qc']].values
-            print(umap_coords)
-            
-            # Use KMeans to select centroids that are well-distributed
-            from sklearn.cluster import KMeans
-            n_clusters = n_known  # One cluster per known pair
-            kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
-            cluster_labels = kmeans.fit_predict(umap_coords)
-            
-            # Select the point closest to each centroid
-            from sklearn.metrics.pairwise import euclidean_distances
-            selected_indices = []
-            for i in range(n_clusters):
-                cluster_points = unknown_pairs[cluster_labels == i]
-                if len(cluster_points) > 0:
-                    cluster_coords = cluster_points[['nmfUMAP1_af_qc', 'nmfUMAP2_af_qc']].values
-                    centroid = kmeans.cluster_centers_[i].reshape(1, -1)
-                    distances = euclidean_distances(cluster_coords, centroid)
-                    closest_idx = distances.argmin()
-                    selected_indices.append(cluster_points.iloc[closest_idx].name)
-            
-            # If we don't have enough points, add random points from larger clusters
-            if len(selected_indices) < n_known:
-                remaining = n_known - len(selected_indices)
-                cluster_sizes = pd.Series(cluster_labels).value_counts()
-                large_clusters = cluster_sizes[cluster_sizes > 1].index
-                additional_points = []
-                for cluster_id in large_clusters:
-                    cluster_points = unknown_pairs[cluster_labels == cluster_id]
-                    if len(additional_points) < remaining:
-                        # Exclude already selected points
-                        available_points = cluster_points[~cluster_points.index.isin(selected_indices)]
-                        if len(available_points) > 0:
-                            additional_points.append(available_points.iloc[0].name)
-                selected_indices.extend(additional_points[:remaining])
-            
-            unknown_balanced = unknown_pairs.loc[selected_indices]
-            
-        else:  # random method
-            # Randomly sample from unknown pairs
-            np.random.seed(random_state)
-            unknown_balanced = unknown_pairs.sample(n=n_known, random_state=random_state)
+        # Analyze group structure
+        group_sizes = df.groupby('afpd_dir_name').size()
+        logging.info(f"\nGroup structure analysis:")
+        logging.info(f"  Total groups: {len(group_sizes)}")
+        logging.info(f"  Models per group distribution: {group_sizes.value_counts().sort_index().to_dict()}")
+        logging.info(f"  Average models per group: {group_sizes.mean():.1f}")
         
-        # Combine and shuffle
-        balanced_df = pd.concat([known_pairs, unknown_balanced])
-        balanced_df = balanced_df.sample(frac=1, random_state=random_state).reset_index(drop=True)
-                
-        logging.info(f"Balanced dataset: {len(balanced_df)} total pairs")
-        logging.info(f"Known pairs: {(balanced_df['known_pair'] == 1).sum()}")
-        logging.info(f"Unknown pairs (after balancing): {(balanced_df['known_pair'] == 0).sum()}")
+        # Separate groups by known/unknown status
+        group_labels = {}
+        mixed_groups = []
         
-        if split_method == 'umap':
-            logging.info("Used UMAP-based selection for unknown pairs")
-        else:
-            logging.info("Used random selection for unknown pairs")
+        for group_name in df['afpd_dir_name'].unique():
+            group_data = df[df['afpd_dir_name'] == group_name]
+            unique_labels = group_data['known_pair'].unique()
+            
+            if len(unique_labels) == 1:
+                group_labels[group_name] = unique_labels[0]
+            else:
+                mixed_groups.append(group_name)
+                group_labels[group_name] = group_data['known_pair'].iloc[0]
         
-        return balanced_df
-    
+        if mixed_groups:
+            logging.warning(f"Found {len(mixed_groups)} groups with mixed known/unknown labels")
+        
+        # Get known and unknown groups
+        known_groups = [group for group, label in group_labels.items() if label == 1]
+        unknown_groups = [group for group, label in group_labels.items() if label == 0]
+        
+        # Get ALL models from known groups
+        all_known_indices = df[df['afpd_dir_name'].isin(known_groups)].index
+        n_known_models = len(all_known_indices)
+        n_known_groups = len(known_groups)
+        
+        if n_known_groups == 0:
+            logging.warning("No known groups found!")
+            return df, df, df
+            
+        # Calculate target sizes
+        unknown_groups_needed = n_known_groups  # Same number of groups for 1:1 model ratio
+        
+        logging.info(f"\nBalance analysis:")
+        logging.info(f"  Known groups: {n_known_groups}")
+        logging.info(f"  Known models: {n_known_models}")
+        logging.info(f"  Available unknown groups: {len(unknown_groups)}")
+        logging.info(f"  Unknown groups needed: {unknown_groups_needed}")
+        
+        if len(unknown_groups) == 0:
+            logging.warning("No unknown groups found, returning only known samples")
+            return df.loc[all_known_indices], df.loc[all_known_indices], df.loc[all_known_indices]
+        
+        if len(unknown_groups) < unknown_groups_needed:
+            logging.warning(f"Not enough unknown groups ({len(unknown_groups)}) to match known groups ({unknown_groups_needed})")
+            unknown_groups_needed = len(unknown_groups)
+        
+        if split_method == 'cluster':
+            # Get cluster column from config
+            cluster_column = self.model_config.get('cluster_column', 'cluster_id')
+            if cluster_column not in df.columns:
+                raise ValueError(f"Cluster column '{cluster_column}' not found in dataframe")
+            
+            # Get cluster information for unknown groups
+            unknown_df = df[df['afpd_dir_name'].isin(unknown_groups)].copy()
+            unknown_df['group_name'] = unknown_df['afpd_dir_name']
+            
+            # Get unique clusters
+            unique_clusters = unknown_df[cluster_column].unique()
+            logging.info(f"\nFound {len(unique_clusters)} unique clusters in unknown groups")
+            
+            # Calculate target groups per cluster
+            target_per_cluster = max(1, unknown_groups_needed // len(unique_clusters))
+            remaining_needed = unknown_groups_needed
+            
+            # Select groups from each cluster
+            selected_groups = []
+            cluster_selections = {}
+            
+            for cluster_id in unique_clusters:
+                cluster_groups = unknown_df[unknown_df[cluster_column] == cluster_id]
+                if len(cluster_groups) > 0:
+                    # Calculate how many to select from this cluster
+                    n_to_select = min(target_per_cluster, len(cluster_groups), remaining_needed)
+                    if n_to_select > 0:
+                        selected = cluster_groups.sample(n=n_to_select, random_state=random_state)
+                        selected_groups.extend(selected['group_name'].unique().tolist())
+                        remaining_needed -= n_to_select
+                        cluster_selections[cluster_id] = n_to_select
+            
+            # If we still need more groups, randomly select from remaining groups
+            if len(selected_groups) < unknown_groups_needed:
+                remaining_groups = [g for g in unknown_groups if g not in selected_groups]
+                n_to_select = unknown_groups_needed - len(selected_groups)
+                additional_selected = np.random.choice(remaining_groups, size=n_to_select, replace=False)
+                selected_groups.extend(additional_selected)
+            
+            selected_unknown_groups = selected_groups[:unknown_groups_needed]
+            
+            # Log selection results
+            logging.info(f"\nSelected unknown groups:")
+            logging.info(f"  Total selected: {len(selected_unknown_groups)}")
+            logging.info("\nCluster selection details:")
+            for cluster_id, count in cluster_selections.items():
+                original_size = len(unknown_df[unknown_df[cluster_column] == cluster_id])
+                selection_ratio = count / original_size
+                logging.info(f"  Cluster {cluster_id}: Selected {count}/{original_size} points ({selection_ratio:.1%})")
+            
+            # Create selected groups list
+            selected_groups = known_groups + list(selected_unknown_groups)
+            
+            # Create a dataframe with just the selected groups
+            selected_df = df[df['afpd_dir_name'].isin(selected_groups)].copy()
+            
+            # Split at the GROUP level to ensure group integrity
+            # Get unique groups and their labels
+            group_info = selected_df.groupby('afpd_dir_name')['known_pair'].first().reset_index()
+            known_group_names = group_info[group_info['known_pair'] == 1]['afpd_dir_name'].tolist()
+            unknown_group_names = group_info[group_info['known_pair'] == 0]['afpd_dir_name'].tolist()
+            
+            # Calculate split sizes for groups (not individual models)
+            n_known_groups_total = len(known_group_names)
+            n_unknown_groups_total = len(unknown_group_names)
+            
+            n_known_test = int(n_known_groups_total * test_size)
+            n_known_valid = int(n_known_groups_total * valid_size)
+            n_known_train = n_known_groups_total - n_known_test - n_known_valid
+            
+            n_unknown_test = int(n_unknown_groups_total * test_size)
+            n_unknown_valid = int(n_unknown_groups_total * valid_size)
+            n_unknown_train = n_unknown_groups_total - n_unknown_test - n_unknown_valid
+            
+            # Split known groups
+            known_groups_shuffled = np.random.permutation(known_group_names)
+            known_train_groups = known_groups_shuffled[:n_known_train]
+            known_valid_groups = known_groups_shuffled[n_known_train:n_known_train + n_known_valid]
+            known_test_groups = known_groups_shuffled[n_known_train + n_known_valid:]
+            
+            # Split unknown groups
+            unknown_groups_shuffled = np.random.permutation(unknown_group_names)
+            unknown_train_groups = unknown_groups_shuffled[:n_unknown_train]
+            unknown_valid_groups = unknown_groups_shuffled[n_unknown_train:n_unknown_train + n_unknown_valid]
+            unknown_test_groups = unknown_groups_shuffled[n_unknown_train + n_unknown_valid:]
+            
+            # Combine group splits
+            train_groups = list(known_train_groups) + list(unknown_train_groups)
+            valid_groups = list(known_valid_groups) + list(unknown_valid_groups)
+            test_groups = list(known_test_groups) + list(unknown_test_groups)
+            
+            # Create split dataframes by filtering on group names
+            train_df = df[df['afpd_dir_name'].isin(train_groups)].copy()
+            valid_df = df[df['afpd_dir_name'].isin(valid_groups)].copy()
+            test_df = df[df['afpd_dir_name'].isin(test_groups)].copy()
+            
+            # Verify balance in each split
+            for split_name, split_df in [('Train', train_df), ('Valid', valid_df), ('Test', test_df)]:
+                n_known = (split_df['known_pair'] == 1).sum()
+                n_unknown = (split_df['known_pair'] == 0).sum()
+                total = len(split_df)
+                known_ratio = n_known / total
+                n_groups = split_df['afpd_dir_name'].nunique()
+                logging.info(f"\n{split_name} split balance:")
+                logging.info(f"  Known pairs: {n_known} ({known_ratio:.2%})")
+                logging.info(f"  Unknown pairs: {n_unknown} ({1-known_ratio:.2%})")
+                logging.info(f"  Total samples: {total}")
+                logging.info(f"  Number of groups: {n_groups}")
+            
+            return train_df, valid_df, test_df
+            
+        elif split_method == 'random_balanced':
+            # Select unknown groups randomly
+            selected_unknown_groups = np.random.choice(unknown_groups, size=unknown_groups_needed, replace=False)
+            
+            # Get all indices for selected groups
+            selected_indices = df[df['afpd_dir_name'].isin(known_groups + list(selected_unknown_groups))].index
+            
+            # Create a dataframe with just the selected groups
+            selected_df = df.loc[selected_indices].copy()
+            
+            # Split at the GROUP level to ensure group integrity
+            # Get unique groups and their labels
+            group_info = selected_df.groupby('afpd_dir_name')['known_pair'].first().reset_index()
+            known_group_names = group_info[group_info['known_pair'] == 1]['afpd_dir_name'].tolist()
+            unknown_group_names = group_info[group_info['known_pair'] == 0]['afpd_dir_name'].tolist()
+            
+            # Calculate split sizes for groups (not individual models)
+            n_known_groups_total = len(known_group_names)
+            n_unknown_groups_total = len(unknown_group_names)
+            
+            n_known_test = int(n_known_groups_total * test_size)
+            n_known_valid = int(n_known_groups_total * valid_size)
+            n_known_train = n_known_groups_total - n_known_test - n_known_valid
+            
+            n_unknown_test = int(n_unknown_groups_total * test_size)
+            n_unknown_valid = int(n_unknown_groups_total * valid_size)
+            n_unknown_train = n_unknown_groups_total - n_unknown_test - n_unknown_valid
+            
+            # Split known groups
+            known_groups_shuffled = np.random.permutation(known_group_names)
+            known_train_groups = known_groups_shuffled[:n_known_train]
+            known_valid_groups = known_groups_shuffled[n_known_train:n_known_train + n_known_valid]
+            known_test_groups = known_groups_shuffled[n_known_train + n_known_valid:]
+            
+            # Split unknown groups
+            unknown_groups_shuffled = np.random.permutation(unknown_group_names)
+            unknown_train_groups = unknown_groups_shuffled[:n_unknown_train]
+            unknown_valid_groups = unknown_groups_shuffled[n_unknown_train:n_unknown_train + n_unknown_valid]
+            unknown_test_groups = unknown_groups_shuffled[n_unknown_train + n_unknown_valid:]
+            
+            # Combine group splits
+            train_groups = list(known_train_groups) + list(unknown_train_groups)
+            valid_groups = list(known_valid_groups) + list(unknown_valid_groups)
+            test_groups = list(known_test_groups) + list(unknown_test_groups)
+            
+            # Create split dataframes by filtering on group names
+            train_df = df[df['afpd_dir_name'].isin(train_groups)].copy()
+            valid_df = df[df['afpd_dir_name'].isin(valid_groups)].copy()
+            test_df = df[df['afpd_dir_name'].isin(test_groups)].copy()
+            
+            # Verify balance in each split
+            for split_name, split_df in [('Train', train_df), ('Valid', valid_df), ('Test', test_df)]:
+                n_known = (split_df['known_pair'] == 1).sum()
+                n_unknown = (split_df['known_pair'] == 0).sum()
+                total = len(split_df)
+                known_ratio = n_known / total
+                n_groups = split_df['afpd_dir_name'].nunique()
+                logging.info(f"\n{split_name} split balance:")
+                logging.info(f"  Known pairs: {n_known} ({known_ratio:.2%})")
+                logging.info(f"  Unknown pairs: {n_unknown} ({1-known_ratio:.2%})")
+                logging.info(f"  Total samples: {total}")
+                logging.info(f"  Number of groups: {n_groups}")
+            
+            return train_df, valid_df, test_df
+
     def _save_processed_features(self, features: Dict[str, np.ndarray], df: pd.DataFrame, split: str, output_dir: str):
         """Save processed features to CSV files.
         
@@ -294,39 +499,77 @@ class DataPreprocessor:
         """
         os.makedirs(output_dir, exist_ok=True)
         
-        # Save each feature group separately
+        # Save each feature group separately (normalized values only)
         for group_name, feature_array in features.items():
             if group_name.endswith('_encoded'):
                 # For encoded categorical features, save both encoded and original values
                 cat_col = group_name.replace('_encoded', '')
                 encoded_df = pd.DataFrame({
-                    'original_value': df[cat_col],
+                    'code': df['code'].values,  # Use .values to ensure we get the array
+                    'original_value': df[cat_col].values,
                     'encoded_value': feature_array,
-                    'cleaned_value': df[cat_col].apply(self._clean_text)
+                    'cleaned_value': df[cat_col].apply(self._clean_text).values
                 })
                 encoded_df.to_csv(os.path.join(output_dir, f'{split}_{group_name}.csv'), index=False)
+                logging.info(f"Saved {split} {group_name} to {output_dir}")
             else:
                 # For normalized features, get original column names from config
                 if group_name in self._get_column_groups():
                     columns = self._get_column_groups()[group_name]
                     feature_df = pd.DataFrame(feature_array, columns=columns)
+                    # Add code column as first column using .values
+                    feature_df.insert(0, 'code', df['code'].values)
                     feature_df.to_csv(os.path.join(output_dir, f'{split}_{group_name}_normalized.csv'), index=False)
+                    logging.info(f"Saved {split} {group_name} normalized features to {output_dir}")
                 else:
                     # For other features (like expression profiles)
                     feature_df = pd.DataFrame(feature_array)
+                    # Add code column as first column using .values
+                    feature_df.insert(0, 'code', df['code'].values)
                     feature_df.to_csv(os.path.join(output_dir, f'{split}_{group_name}.csv'), index=False)
+                    logging.info(f"Saved {split} {group_name} to {output_dir}")
+            
+            # Verify code column was copied correctly and print first 5 codes
+            saved_file = os.path.join(output_dir, f'{split}_{group_name}{"_normalized" if group_name in self._get_column_groups() else ""}.csv')
+            if os.path.exists(saved_file):
+                saved_df = pd.read_csv(saved_file)
+                if 'code' not in saved_df.columns:
+                    logging.error(f"Code column missing in saved file: {saved_file}")
+                elif saved_df['code'].isna().any():
+                    logging.error(f"Found null values in code column of saved file: {saved_file}")
+                elif (saved_df['code'] == '').any():
+                    logging.error(f"Found empty strings in code column of saved file: {saved_file}")
+                else:
+                    logging.info(f"Verified code column in {saved_file}: {len(saved_df)} rows")
+                    # Print first 5 codes
+                    first_5_codes = saved_df['code'].head().tolist()
+                    logging.info(f"First 5 codes in {saved_file}:")
+                    for i, code in enumerate(first_5_codes, 1):
+                        logging.info(f"  {i}. {code}")
 
     def preprocess_data(self, 
-                       data_path: str,
-                       split_method: str = 'umap',
-                       test_size: float = 0.1,
-                       valid_size: float = 0.1,
+                       data_path: Optional[str] = None,
+                       split_method: str = 'cluster',
+                       test_size: Optional[float] = None,
+                       valid_size: Optional[float] = None,
                        random_state: int = 42,
                        feature_groups: Optional[Dict[str, bool]] = None,
                        filters: Optional[Dict[str, Union[str, List[str], Dict[str, bool]]]] = None) -> Tuple[Dict[str, Dataset], Dict[str, StandardScaler]]:
         """
         Preprocess data and create train/valid/test splits.
         """
+        # Use config values if not provided
+        data_path = data_path or self.model_config['data_path']
+        test_size = test_size or self.model_config['data_params']['test_size']
+        valid_size = valid_size or self.model_config['data_params']['valid_size']
+        random_state = random_state or self.model_config['data_params'].get('random_state', 42)
+        filters = filters or self.model_config.get('filters')
+        
+        # Get split method from config if not provided
+        if split_method == 'cluster' and 'split_method' in self.model_config['data_params']:
+            split_method = self.model_config['data_params']['split_method']
+            logging.info(f"Using split method from config: {split_method}")
+        
         # Update active feature groups if provided
         if feature_groups is not None:
             self.active_feature_groups = {
@@ -338,7 +581,32 @@ class DataPreprocessor:
                 logging.info(f"  - {group}")
         
         logging.info(f"Loading data from {data_path}")
-        df = pd.read_csv(data_path)
+        df = pd.read_csv(data_path, low_memory=False)  # Add low_memory=False to handle mixed types
+        
+        # Check for code column
+        if 'code' not in df.columns:
+            logging.warning("No 'code' column found in the data. Creating one using afpd_dir_name...")
+            df['code'] = df['afpd_dir_name']
+        else:
+            # Check for empty or null values in code column
+            null_codes = df['code'].isna().sum()
+            if null_codes > 0:
+                logging.warning(f"Found {null_codes} null values in code column. Filling with afpd_dir_name...")
+                df.loc[df['code'].isna(), 'code'] = df.loc[df['code'].isna(), 'afpd_dir_name']
+            
+            # Check for empty strings
+            empty_codes = (df['code'] == '').sum()
+            if empty_codes > 0:
+                logging.warning(f"Found {empty_codes} empty strings in code column. Filling with afpd_dir_name...")
+                df.loc[df['code'] == '', 'code'] = df.loc[df['code'] == '', 'afpd_dir_name']
+        
+        # Log code column statistics
+        unique_codes = df['code'].nunique()
+        logging.info(f"Code column statistics:")
+        logging.info(f"  Total rows: {len(df)}")
+        logging.info(f"  Unique codes: {unique_codes}")
+        logging.info(f"  Null values: {df['code'].isna().sum()}")
+        logging.info(f"  Empty strings: {(df['code'] == '').sum()}")
         
         # Convert known_pair to binary values
         if 'known_pair' in df.columns:
@@ -352,9 +620,16 @@ class DataPreprocessor:
         if filters:
             logging.info("Applying data filters...")
             df = self._apply_filters(df, filters)
+            
+            # Check code column after filtering
+            logging.info(f"Code column statistics after filtering:")
+            logging.info(f"  Total rows: {len(df)}")
+            logging.info(f"  Unique codes: {df['code'].nunique()}")
+            logging.info(f"  Null values: {df['code'].isna().sum()}")
+            logging.info(f"  Empty strings: {(df['code'] == '').sum()}")
         
         # Pre-process categorical features before splitting
-        for cat_col in self.config['categorical_columns']:
+        for cat_col in self.data_config['categorical_columns']:
             # Clean text
             df[f'{cat_col}_cleaned'] = df[cat_col].apply(self._clean_text)
             
@@ -381,233 +656,67 @@ class DataPreprocessor:
             n_categories = len(encoder.classes_)
             logging.info(f"Encoded {cat_col} with {n_categories} unique categories")
         
-        # Balance the dataset
-        df = self.balance_dataset(df, split_method=split_method, random_state=random_state)
+        # Balance and split dataset in one operation
+        train_df, valid_df, test_df = self.balance_and_split_dataset(
+            df,
+            split_method=split_method,
+            test_size=test_size,
+            valid_size=valid_size,
+            random_state=random_state
+        )
         
-        # Split data
-        if split_method == 'umap':
-            train_idx, valid_idx, test_idx = self._split_by_umap(
-                df, 
-                test_size=test_size,
-                valid_size=valid_size,
-                random_state=random_state
-            )
-        else:
-            train_idx, valid_idx, test_idx = self._split_random(
-                df,
-                test_size=test_size,
-                valid_size=valid_size,
-                random_state=random_state
-            )
-            
-        # Add split labels to dataframe
-        df['split'] = 'train'  # default
-        df.loc[valid_idx, 'split'] = 'valid'
-        df.loc[test_idx, 'split'] = 'test'
+        # Add split labels to each dataframe
+        train_df['split'] = 'train'
+        valid_df['split'] = 'valid'
+        test_df['split'] = 'test'
         
-        # Create splits
-        train_df = df.iloc[train_idx]
-        valid_df = df.iloc[valid_idx]
-        test_df = df.iloc[test_idx]
+        # Combine all splits back into one dataframe for saving
+        df_with_splits = pd.concat([train_df, valid_df, test_df])
         
         # Process features for each split
-        train_features, train_labels = self._process_split(train_df, is_training=True)
-        valid_features, valid_labels = self._process_split(valid_df, is_training=False)
-        test_features, test_labels = self._process_split(test_df, is_training=False)
+        train_features, train_labels, train_codes = self._process_split(train_df, is_training=True)
+        valid_features, valid_labels, valid_codes = self._process_split(valid_df, is_training=False)
+        test_features, test_labels, test_codes = self._process_split(test_df, is_training=False)
         
-        # Save processed features
-        output_dir = os.path.join(os.path.dirname(data_path), 'processed_features')
+        # Save processed features using config name
+        config_name = self.model_config.get('name', 'unnamed_config')
+        output_dir = os.path.join('data', 'preprocessing_tests', config_name)
         self._save_processed_features(train_features, train_df, 'train', output_dir)
         self._save_processed_features(valid_features, valid_df, 'valid', output_dir)
         self._save_processed_features(test_features, test_df, 'test', output_dir)
+        df_with_splits.to_csv(os.path.join(output_dir, 'df_with_splits.csv'), index=False)
         logging.info(f"Saved processed features to {output_dir}")
         
-        # Save processed dataset with split labels
-        output_path = os.path.join(os.path.dirname(data_path), 'processed_features_with_splits.csv')
-        df.to_csv(output_path, index=False)
-        logging.info(f"Saved processed dataset with split labels to {output_path}")
+        # Create joined file with original data and splits
+        original_data_path = self.model_config['data_path']
+        original_df = pd.read_csv(original_data_path, low_memory=False)  # Add low_memory=False to handle mixed types
+        
+        # Create a dataframe with just the split information
+        splits_df = pd.DataFrame({
+            'afpd_dir_name': df_with_splits['afpd_dir_name'],
+            'split': df_with_splits['split']
+        })
+        
+        # Left join original data with splits
+        joined_df = original_df.merge(splits_df, on='afpd_dir_name', how='left')  # Changed from 'left' to 'inner' join
+        
+        # Save joined file
+        original_filename = os.path.basename(original_data_path)
+        base_name = os.path.splitext(original_filename)[0]
+        joined_path = os.path.join(output_dir, f'{base_name}_with_splits.csv')
+        joined_df.to_csv(joined_path, index=False)
+        logging.info(f"Saved joined file with splits to: {joined_path}")
+        logging.info(f"Total rows in joined file: {len(joined_df)}")
         
         # Create datasets
         datasets = {
-            'train': GPCRDataset(train_features, train_labels, self.active_feature_groups, self.config, is_training=True),
-            'valid': GPCRDataset(valid_features, valid_labels, self.active_feature_groups, self.config, is_training=False),
-            'test': GPCRDataset(test_features, test_labels, self.active_feature_groups, self.config, is_training=False)
+            'train': GPCRDataset(train_features, train_labels, self.active_feature_groups, self.data_config, codes=train_codes, is_training=True),
+            'valid': GPCRDataset(valid_features, valid_labels, self.active_feature_groups, self.data_config, codes=valid_codes, is_training=False),
+            'test': GPCRDataset(test_features, test_labels, self.active_feature_groups, self.data_config, codes=test_codes, is_training=False)
         }
         
         return datasets, self.scalers
 
-    def _split_by_umap(self, 
-                      df: pd.DataFrame,
-                      test_size: float,
-                      valid_size: float,
-                      random_state: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Split data using UMAP coordinates to ensure equidistant distribution in each split.
-        Combines polar coordinate distribution with cluster awareness.
-        """
-        from sklearn.cluster import DBSCAN
-        from sklearn.preprocessing import StandardScaler
-        
-        # Get UMAP coordinates
-        umap_coords = df[['nmfUMAP1_af_qc', 'nmfUMAP2_af_qc']].values
-        
-        # Scale coordinates for DBSCAN
-        scaler = StandardScaler()
-        umap_scaled = scaler.fit_transform(umap_coords)
-        
-        # Identify clusters using DBSCAN
-        dbscan = DBSCAN(eps=0.3, min_samples=5)
-        cluster_labels = dbscan.fit_predict(umap_scaled)
-        n_clusters = len(set(cluster_labels[cluster_labels >= 0]))
-        n_noise = len(cluster_labels[cluster_labels == -1])
-        
-        logging.info(f"\nCluster Analysis:")
-        logging.info(f"Found {n_clusters} clusters and {n_noise} noise points")
-        
-        # Calculate cluster sizes and identify small clusters
-        cluster_sizes = {}
-        small_clusters = set()
-        for i in range(-1, max(cluster_labels) + 1):
-            size = np.sum(cluster_labels == i)
-            cluster_sizes[i] = size
-            if size < 10 and i >= 0:  # Don't include noise points (-1)
-                small_clusters.add(i)
-            logging.info(f"Cluster {i}: {size} points")
-        
-        # Calculate target sizes for each split
-        n_total = len(df)
-        n_test = int(n_total * test_size)
-        n_valid = int(n_total * valid_size)
-        n_train = n_total - n_test - n_valid
-        
-        # Normalize UMAP coordinates to [0,1] range
-        umap_min = umap_coords.min(axis=0)
-        umap_max = umap_coords.max(axis=0)
-        umap_range = umap_max - umap_min
-        umap_normalized = (umap_coords - umap_min) / umap_range
-        
-        # Calculate polar coordinates for better spatial distribution
-        center = np.mean(umap_normalized, axis=0)
-        relative_coords = umap_normalized - center
-        angles = np.arctan2(relative_coords[:, 1], relative_coords[:, 0])
-        distances = np.sqrt(np.sum(relative_coords**2, axis=1))
-        
-        # Sort by angle and then by distance for systematic selection
-        sort_idx = np.lexsort((distances, angles))
-        
-        # Initialize arrays for each split
-        test_mask = np.zeros(n_total, dtype=bool)
-        valid_mask = np.zeros(n_total, dtype=bool)
-        
-        # First, handle small clusters
-        np.random.seed(random_state)
-        for cluster_idx in small_clusters:
-            cluster_mask = cluster_labels == cluster_idx
-            cluster_points = np.where(cluster_mask)[0]
-            
-            if len(cluster_points) > 0:
-                # Ensure at least one point from small clusters in each split
-                n_points = len(cluster_points)
-                n_per_split = max(1, n_points // 3)
-                
-                # Randomly assign points to splits
-                np.random.shuffle(cluster_points)
-                test_points = cluster_points[:n_per_split]
-                valid_points = cluster_points[n_per_split:2*n_per_split]
-                
-                test_mask[test_points] = True
-                valid_mask[valid_points] = True
-                
-                # Create synthetic points for small clusters
-                points_needed = max(0, 3 - n_points)  # Ensure at least 3 points per split
-                if points_needed > 0:
-                    noise = np.random.normal(0, 0.1, (points_needed, 2))
-                    base_point = umap_coords[cluster_points[0]]
-                    synthetic_points = np.array([base_point + n for n in noise])
-                    umap_coords = np.vstack([umap_coords, synthetic_points])
-                    cluster_labels = np.append(cluster_labels, [cluster_idx] * points_needed)
-        
-        # Remove small cluster points from sort_idx
-        remaining_mask = ~np.isin(sort_idx, np.where(np.isin(cluster_labels, list(small_clusters)))[0])
-        remaining_sort_idx = sort_idx[remaining_mask]
-        
-        # Calculate remaining points needed for each split
-        n_test_remaining = n_test - np.sum(test_mask)
-        n_valid_remaining = n_valid - np.sum(valid_mask)
-        total_remaining = n_test_remaining + n_valid_remaining
-        
-        # Distribute remaining points using polar coordinates
-        if total_remaining > 0:
-            step_size = len(remaining_sort_idx) / total_remaining
-            for i in range(total_remaining):
-                idx = remaining_sort_idx[int(i * step_size)]
-                if i < n_test_remaining:
-                    test_mask[idx] = True
-                else:
-                    valid_mask[idx] = True
-        
-        # Remaining points go to train
-        train_mask = ~(test_mask | valid_mask)
-        
-        # Get indices for each split
-        train_idx = df.index[train_mask]
-        valid_idx = df.index[valid_mask]
-        test_idx = df.index[test_mask]
-        
-        # Verify class balance and distribution in each split
-        logging.info("\nSplit distribution:")
-        for split_name, split_idx in [('Train', train_idx), ('test', test_idx), ('valid', valid_idx)]:
-            n_known = (df.loc[split_idx, 'known_pair'] == 1).sum()
-            n_unknown = (df.loc[split_idx, 'known_pair'] == 0).sum()
-            
-            # Calculate UMAP statistics for this split
-            split_coords = umap_coords[np.isin(df.index, split_idx)]
-            umap1_mean = np.mean(split_coords[:, 0])
-            umap2_mean = np.mean(split_coords[:, 1])
-            umap1_std = np.std(split_coords[:, 0])
-            umap2_std = np.std(split_coords[:, 1])
-            
-            # Calculate cluster representation
-            split_clusters = cluster_labels[np.isin(df.index, split_idx)]
-            unique_clusters = len(set(split_clusters[split_clusters >= 0]))
-            small_clusters_represented = len(set(split_clusters) & small_clusters)
-            
-            logging.info(f"\n{split_name} split:")
-            logging.info(f"  Total: {len(split_idx)} samples")
-            logging.info(f"  Known pairs: {n_known}")
-            logging.info(f"  Unknown pairs: {n_unknown}")
-            logging.info(f"  Known ratio: {n_known/len(split_idx):.2f}")
-            logging.info(f"  UMAP1 mean: {umap1_mean:.2f}, std: {umap1_std:.2f}")
-            logging.info(f"  UMAP2 mean: {umap2_mean:.2f}, std: {umap2_std:.2f}")
-            logging.info(f"  Clusters represented: {unique_clusters}/{n_clusters}")
-            logging.info(f"  Small clusters represented: {small_clusters_represented}/{len(small_clusters)}")
-        
-        return train_idx, valid_idx, test_idx
-    
-    def _split_random(self,
-                     df: pd.DataFrame,
-                     test_size: float,
-                     valid_size: float,
-                     random_state: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Split data randomly while maintaining class balance."""
-        # First split off test set
-        train_valid_idx, test_idx = train_test_split(
-            df.index,
-            test_size=test_size,
-            random_state=random_state,
-            stratify=df['known_pair']
-        )
-        
-        # Then split remaining data into train and validation
-        train_idx, valid_idx = train_test_split(
-            train_valid_idx,
-            test_size=valid_size/(1-test_size),
-            random_state=random_state,
-            stratify=df.loc[train_valid_idx, 'known_pair']
-        )
-        
-        return train_idx, valid_idx, test_idx
-    
     def _clean_text(self, text):
         """Clean text by removing HTML tags and normalizing whitespace."""
         # Remove HTML tags
@@ -618,7 +727,7 @@ class DataPreprocessor:
 
     def _process_split(self,
                       df: pd.DataFrame,
-                      is_training: bool = False) -> Tuple[Dict[str, np.ndarray], np.ndarray]:
+                      is_training: bool = False) -> Tuple[Dict[str, np.ndarray], np.ndarray, Optional[np.ndarray]]:
         """Process features for a data split."""
         features = {}
         column_groups = self._get_column_groups()
@@ -660,7 +769,7 @@ class DataPreprocessor:
                         features[group_name] = self.scalers[f'{group_name}_minmax'].transform(normalized)
         
         # Get categorical features that were already encoded
-        for cat_col in self.config['categorical_columns']:
+        for cat_col in self.data_config['categorical_columns']:
             features[f'{cat_col}_encoded'] = df[f'{cat_col}_encoded'].values
         
         # Process expression profiles if enabled
@@ -708,7 +817,181 @@ class DataPreprocessor:
         # Get labels
         labels = df['known_pair'].values
         
-        return features, labels
+        # Get codes if available
+        codes = df['code'].values if 'code' in df.columns else None
+        
+        return features, labels, codes
+
+    def preprocess_data_multiple_rounds(self, 
+                                      data_path: Optional[str] = None,
+                                      split_method: str = 'umap',
+                                      test_size: Optional[float] = None,
+                                      valid_size: Optional[float] = None,
+                                      random_state: int = 42,
+                                      feature_groups: Optional[Dict[str, bool]] = None,
+                                      filters: Optional[Dict[str, Union[str, List[str], Dict[str, bool]]]] = None,
+                                      n_rounds: int = 5) -> List[Tuple[Dict[str, Dataset], Dict[str, StandardScaler]]]:
+        """
+        Preprocess data and create multiple training rounds with different unknown pairs.
+        
+        Args:
+            data_path: Path to data file
+            split_method: Method for splitting ('umap', 'random', or 'random_balanced')
+            test_size: Proportion of data for test set
+            valid_size: Proportion of data for validation set
+            random_state: Random seed
+            feature_groups: Dictionary of feature groups to use
+            filters: Dictionary of filters to apply
+            n_rounds: Number of training rounds to perform
+            
+        Returns:
+            List of tuples containing (datasets, scalers) for each round
+        """
+        # Use config values if not provided
+        data_path = data_path or self.model_config['data_path']
+        test_size = test_size or self.model_config['data_params']['test_size']
+        valid_size = valid_size or self.model_config['data_params']['valid_size']
+        random_state = random_state or self.model_config['data_params'].get('random_state', 42)
+        filters = filters or self.model_config.get('filters')
+        
+        # Update active feature groups if provided
+        if feature_groups is not None:
+            self.active_feature_groups = {
+                group for group, active in feature_groups.items() 
+                if active
+            }
+            logging.info("Updated active feature groups:")
+            for group in sorted(self.active_feature_groups):
+                logging.info(f"  - {group}")
+        
+        logging.info(f"Loading data from {data_path}")
+        df = pd.read_csv(data_path, low_memory=False)
+        
+        # Convert known_pair to binary values
+        if 'known_pair' in df.columns:
+            if df['known_pair'].dtype == 'object':
+                df['known_pair'] = (df['known_pair'] == 'known').astype(int)
+            logging.info(f"Converted known_pair to binary values (0/1)")
+            logging.info(f"Known pairs (1): {(df['known_pair'] == 1).sum()}")
+            logging.info(f"Unknown pairs (0): {(df['known_pair'] == 0).sum()}")
+        
+        # Apply filters if provided
+        if filters:
+            logging.info("Applying data filters...")
+            df = self._apply_filters(df, filters)
+        
+        # Pre-process categorical features
+        for cat_col in self.data_config['categorical_columns']:
+            df[f'{cat_col}_cleaned'] = df[cat_col].apply(self._clean_text)
+            encoder = LabelEncoder()
+            encoded = encoder.fit_transform(df[f'{cat_col}_cleaned'])
+            self.encoders[cat_col] = encoder
+            encoded_reshaped = encoded.reshape(-1, 1)
+            z_scaler = StandardScaler()
+            minmax_scaler = MinMaxScaler()
+            normalized = z_scaler.fit_transform(encoded_reshaped)
+            scaled = minmax_scaler.fit_transform(normalized)
+            self.scalers[f'{cat_col}_z'] = z_scaler
+            self.scalers[f'{cat_col}_minmax'] = minmax_scaler
+            df[f'{cat_col}_encoded'] = scaled.ravel()
+            n_categories = len(encoder.classes_)
+            logging.info(f"Encoded {cat_col} with {n_categories} unique categories")
+        
+        # Separate known and unknown pairs
+        known_df = df[df['known_pair'] == 1].copy()
+        unknown_df = df[df['known_pair'] == 0].copy()
+        
+        # Get unique groups for known and unknown pairs
+        known_groups = known_df['afpd_dir_name'].unique()
+        unknown_groups = unknown_df['afpd_dir_name'].unique()
+        
+        logging.info(f"\nStarting multiple training rounds:")
+        logging.info(f"  Known groups: {len(known_groups)}")
+        logging.info(f"  Unknown groups: {len(unknown_groups)}")
+        logging.info(f"  Number of rounds: {n_rounds}")
+        
+        # Calculate number of unknown groups per round
+        unknown_groups_per_round = len(unknown_groups) // n_rounds
+        if unknown_groups_per_round == 0:
+            unknown_groups_per_round = 1
+            n_rounds = len(unknown_groups)
+            logging.warning(f"Not enough unknown groups for {n_rounds} rounds. Adjusting to {n_rounds} rounds.")
+        
+        # Store results for each round
+        round_results = []
+        
+        # Perform multiple rounds
+        for round_idx in range(n_rounds):
+            logging.info(f"\nProcessing round {round_idx + 1}/{n_rounds}")
+            
+            # Select unknown groups for this round
+            start_idx = round_idx * unknown_groups_per_round
+            end_idx = start_idx + unknown_groups_per_round
+            if round_idx == n_rounds - 1:  # Last round gets remaining groups
+                end_idx = len(unknown_groups)
+            
+            selected_unknown_groups = unknown_groups[start_idx:end_idx]
+            logging.info(f"  Selected {len(selected_unknown_groups)} unknown groups for this round")
+            
+            # Create round dataframe
+            round_df = pd.concat([
+                known_df,
+                unknown_df[unknown_df['afpd_dir_name'].isin(selected_unknown_groups)]
+            ])
+            
+            # Balance and split dataset
+            train_df, valid_df, test_df = self.balance_and_split_dataset(
+                round_df,
+                split_method=split_method,
+                test_size=test_size,
+                valid_size=valid_size,
+                random_state=random_state + round_idx  # Different seed for each round
+            )
+            
+            # Add split labels
+            train_df['split'] = 'train'
+            valid_df['split'] = 'valid'
+            test_df['split'] = 'test'
+            
+            # Combine splits for saving
+            df_with_splits = pd.concat([train_df, valid_df, test_df])
+            
+            # Process features for each split
+            train_features, train_labels, train_codes = self._process_split(train_df, is_training=True)
+            valid_features, valid_labels, valid_codes = self._process_split(valid_df, is_training=False)
+            test_features, test_labels, test_codes = self._process_split(test_df, is_training=False)
+            
+            # Save processed features
+            config_name = self.model_config.get('name', 'unnamed_config')
+            output_dir = os.path.join('data', 'preprocessing_tests', f"{config_name}_round_{round_idx + 1}")
+            self._save_processed_features(train_features, train_df, 'train', output_dir)
+            self._save_processed_features(valid_features, valid_df, 'valid', output_dir)
+            self._save_processed_features(test_features, test_df, 'test', output_dir)
+            df_with_splits.to_csv(os.path.join(output_dir, 'df_with_splits.csv'), index=False)
+            logging.info(f"Saved processed features to {output_dir}")
+            
+            # Create datasets
+            datasets = {
+                'train': GPCRDataset(train_features, train_labels, self.active_feature_groups, self.data_config, codes=train_codes, is_training=True),
+                'valid': GPCRDataset(valid_features, valid_labels, self.active_feature_groups, self.data_config, codes=valid_codes, is_training=False),
+                'test': GPCRDataset(test_features, test_labels, self.active_feature_groups, self.data_config, codes=test_codes, is_training=False)
+            }
+            
+            # Store results for this round
+            round_results.append((datasets, self.scalers.copy()))
+            
+            # Log round statistics
+            for split_name, split_df in [('Train', train_df), ('Valid', valid_df), ('Test', test_df)]:
+                n_known = (split_df['known_pair'] == 1).sum()
+                n_unknown = (split_df['known_pair'] == 0).sum()
+                total = len(split_df)
+                known_ratio = n_known / total
+                logging.info(f"\n{split_name} split balance for round {round_idx + 1}:")
+                logging.info(f"  Known pairs: {n_known} ({known_ratio:.2%})")
+                logging.info(f"  Unknown pairs: {n_unknown} ({1-known_ratio:.2%})")
+                logging.info(f"  Total samples: {total}")
+        
+        return round_results
 
 def create_data_loaders(datasets: Dict[str, Dataset],
                        batch_size: int,

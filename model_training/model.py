@@ -8,6 +8,14 @@ class MultiHeadAttention(nn.Module):
     """Multi-head self-attention module."""
     
     def __init__(self, d_model: int, n_heads: int, dropout: float = 0.1):
+        """
+        Multi-head self-attention module.
+        
+        Args:
+            d_model (int): The dimension of the model.
+            n_heads (int): The number of attention heads.
+            dropout (float): The dropout rate.
+        """
         super().__init__()
         assert d_model % n_heads == 0, "d_model must be divisible by n_heads"
         
@@ -23,14 +31,21 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
         
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass for the multi-head self-attention module.
+        
+        Args:
+            x (torch.Tensor): The input tensor of shape (batch_size, seq_len, d_model).
+            mask (torch.Tensor, optional): The mask tensor of shape (batch_size, seq_len).
+        """
         batch_size = x.size(0)
         
-        # Linear projections and reshape
+        # Linear projections into Q, K, V matrices and reshape
         Q = self.W_q(x).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
         K = self.W_k(x).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
         V = self.W_v(x).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
         
-        # Scaled dot-product attention
+        # Scaled dot-product attention - attention scores
         scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e9)
@@ -48,9 +63,16 @@ class PositionalEncoding(nn.Module):
     """Positional encoding for the transformer."""
     
     def __init__(self, d_model: int, max_len: int = 5000):
+        """
+        Positional encoding for the transformer.
+        
+        Args:
+            d_model (int): The dimension of the model.
+            max_len (int): The maximum length of the sequence.
+        """
         super().__init__()
         
-        pe = torch.zeros(max_len, d_model)
+        pe = torch.zeros(max_len, d_model) # positional encoding matrix
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         
@@ -61,16 +83,35 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the positional encoding.
+        
+        Args:
+            x (torch.Tensor): The input tensor of shape (batch_size, seq_len, d_model).
+        """
         return x + self.pe[:, :x.size(1)]
 
 class AttentionPooling(nn.Module):
     """Attention pooling to create fixed-size representation."""
     
     def __init__(self, d_model: int):
+        """
+        Attention pooling to create fixed-size representation.
+        
+        Args:
+            d_model (int): The dimension of the model.
+        """
         super().__init__()
         self.attention = nn.Linear(d_model, 1)
         
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass for the attention pooling.
+        
+        Args:
+            x (torch.Tensor): The input tensor of shape (batch_size, seq_len, d_model).
+            mask (torch.Tensor, optional): The mask tensor of shape (batch_size, seq_len).
+        """
         # x shape: [batch_size, seq_len, d_model]
         scores = self.attention(x)  # [batch_size, seq_len, 1]
         
@@ -85,25 +126,32 @@ class ContextEncoder(nn.Module):
     """Encodes various context features."""
     
     def __init__(self, config: Dict):
+        """
+        Encodes various context features.
+        
+        Args:
+            config (Dict): The data configuration dictionary.
+        """
         super().__init__()
         
         # Get dimensions from config
         self.d_model = config['model_params']['d_model']
         
-        # Define feature dimensions
-        self.n_distance_features = len(config['distance_metric_columns'])
-        self.n_ligand_features = len(config['ligand_metadata_columns'])
-        self.n_alphafold_features = len(config['alphafold_metric_columns'])
-        self.n_expression_features = len(config['expression_feature_columns'])
+        # Get feature dimensions from the input features if available
+        # Otherwise use reasonable defaults based on the dataset
+        self.n_distance_features = len(config.get('distance_metric_columns', [])) or 10  # Default: 10 distance features
+        self.n_ligand_features = len(config.get('ligand_metadata_columns', [])) or 15    # Default: 15 ligand features
+        self.n_alphafold_features = len(config.get('alphafold_metric_columns', [])) or 8 # Default: 8 AlphaFold features
+        self.n_expression_features = len(config.get('expression_feature_columns', [])) or 12 # Default: 12 expression features
         
         # Individual embeddings for each categorical feature
-        self.categorical_columns = config['categorical_columns']
+        self.categorical_columns = config.get('categorical_columns', [])
         self.categorical_embeddings = nn.ModuleDict({
-            col: nn.Linear(1, self.d_model // (4 * len(self.categorical_columns)))
+            col: nn.Linear(1, self.d_model // (4 * max(len(self.categorical_columns), 1)))
             for col in self.categorical_columns
         })
         
-        # Project each feature group
+        # Project each feature group 
         self.distance_proj = nn.Linear(self.n_distance_features, self.d_model // 4)
         self.ligand_proj = nn.Linear(self.n_ligand_features, self.d_model // 4)
         self.alphafold_proj = nn.Linear(self.n_alphafold_features, self.d_model // 4)

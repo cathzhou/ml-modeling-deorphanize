@@ -1,0 +1,23 @@
+2025-06-17 00:31:15,522 INFO    MainThread:37769 [wandb_setup.py:_flush():81] Current SDK version is 0.20.1
+2025-06-17 00:31:15,522 INFO    MainThread:37769 [wandb_setup.py:_flush():81] Configure stats pid to 37769
+2025-06-17 00:31:15,523 INFO    MainThread:37769 [wandb_setup.py:_flush():81] Loading settings from /Users/catherinez/.config/wandb/settings
+2025-06-17 00:31:15,523 INFO    MainThread:37769 [wandb_setup.py:_flush():81] Loading settings from /Users/catherinez/VSC/ml-modeling-deorphanize/wandb/settings
+2025-06-17 00:31:15,523 INFO    MainThread:37769 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2025-06-17 00:31:15,523 INFO    MainThread:37769 [wandb_init.py:setup_run_log_directory():703] Logging user logs to /Users/catherinez/VSC/ml-modeling-deorphanize/wandb/run-20250617_003115-a8v0n218/logs/debug.log
+2025-06-17 00:31:15,523 INFO    MainThread:37769 [wandb_init.py:setup_run_log_directory():704] Logging internal logs to /Users/catherinez/VSC/ml-modeling-deorphanize/wandb/run-20250617_003115-a8v0n218/logs/debug-internal.log
+2025-06-17 00:31:15,524 INFO    MainThread:37769 [wandb_init.py:init():831] calling init triggers
+2025-06-17 00:31:15,524 INFO    MainThread:37769 [wandb_init.py:init():836] wandb.init called with sweep_config: {}
+config: {'name': 'extracellular_umap', 'data_path': 'data/bm_update_3_subset_lig_features_coexpression_lig_type.csv', 'filters': {'column_equals': {'lig1_location': 'E'}, 'non_nan_columns': ['spoc_score']}, 'feature_groups': {'residue_contacts': True, 'distance_metrics': True, 'ligand_contact_sum': True, 'ligand_contact_indiv': True, 'alphafold_metrics': True, 'expression_features': True, 'ligand_metadata': True, 'receptor_metadata': False, 'spoc_metrics': False, 'expression_profiles': False}, 'model_params': {'d_model': 256, 'n_heads': 8, 'n_layers': 4, 'd_ff': 1024, 'dropout': 0.1, 'batch_size': 32, 'learning_rate': 0.0001, 'weight_decay': 0.01, 'warmup_steps': 1000, 'max_epochs': 100, 'early_stopping_patience': 10}, 'data_params': {'test_size': 0.1, 'valid_size': 0.1, 'random_state': 42, 'num_workers': 4, 'split_method': 'umap'}, '_wandb': {}}
+2025-06-17 00:31:15,524 INFO    MainThread:37769 [wandb_init.py:init():872] starting backend
+2025-06-17 00:31:15,874 INFO    MainThread:37769 [wandb_init.py:init():875] sending inform_init request
+2025-06-17 00:31:16,176 INFO    MainThread:37769 [wandb_init.py:init():883] backend started and connected
+2025-06-17 00:31:16,186 INFO    MainThread:37769 [wandb_init.py:init():956] updated telemetry
+2025-06-17 00:31:16,352 INFO    MainThread:37769 [wandb_init.py:init():980] communicating run to backend with 90.0 second timeout
+2025-06-17 00:31:25,545 INFO    MainThread:37769 [wandb_init.py:init():1032] starting run threads in backend
+2025-06-17 00:31:25,792 INFO    MainThread:37769 [wandb_run.py:_console_start():2453] atexit reg
+2025-06-17 00:31:25,793 INFO    MainThread:37769 [wandb_run.py:_redirect():2301] redirect: wrap_raw
+2025-06-17 00:31:25,793 INFO    MainThread:37769 [wandb_run.py:_redirect():2370] Wrapping output streams.
+2025-06-17 00:31:25,793 INFO    MainThread:37769 [wandb_run.py:_redirect():2393] Redirects installed.
+2025-06-17 00:31:25,798 INFO    MainThread:37769 [wandb_init.py:init():1078] run started, returning control to user process
+2025-06-17 00:31:25,862 INFO    MainThread:37769 [wandb_watch.py:_watch():70] Watching
+2025-06-17 00:31:55,807 INFO    MsgRouterThr:37769 [mailbox.py:close():129] [no run ID] Closing mailbox, abandoning 2 handles.

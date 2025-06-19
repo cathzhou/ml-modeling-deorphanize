@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 278, in <module>
+    main()
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 254, in main
+    trainer = Trainer(model_config_path)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 42, in __init__
+    self.model = GPCRBindingPredictor(self.config).to(self.device)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/model.py", line 187, in __init__
+    self.context_encoder = ContextEncoder(config)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/model.py", line 94, in __init__
+    self.n_distance_features = len(config['distance_metric_columns'])
+KeyError: 'distance_metric_columns'

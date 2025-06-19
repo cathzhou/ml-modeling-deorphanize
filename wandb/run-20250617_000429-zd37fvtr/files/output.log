@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 262, in <module>
+    main()
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 259, in main
+    run_training(model_config_path, data_config_path)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 236, in run_training
+    trainer.train(train_loader, valid_loader)
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 87, in train
+    batch_inputs = {k: v.to(self.device) for k, v in batch[0].items()}
+  File "/Users/catherinez/VSC/ml-modeling-deorphanize/model_training/train.py", line 87, in <dictcomp>
+    batch_inputs = {k: v.to(self.device) for k, v in batch[0].items()}
+AttributeError: 'list' object has no attribute 'to'
