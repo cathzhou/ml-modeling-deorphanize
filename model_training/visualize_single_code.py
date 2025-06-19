@@ -11,8 +11,8 @@ from visualize_attention import AttentionVisualizer
 def visualize_single_code(code):
     """Visualize attention for a single code."""
     # Initialize visualizer
-    model_path = 'model_training/models/best_model.pth'
-    data_path = 'data/residue_test_data/df_with_splits_mhsa_test.csv'
+    model_path = '../model_training/models/best_model.pth'
+    data_path = '../data/residue_test_data/df_with_splits_mhsa_test_1.csv'
     
     try:
         visualizer = AttentionVisualizer(model_path, data_path)

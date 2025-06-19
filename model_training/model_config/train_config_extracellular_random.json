@@ -1,5 +1,5 @@
 {
-    "name": "extracellular_random",
+    "name": "extracellular_random_new",
     "data_path": "data/bm_update_3_subset_lig_features_coexpression_lig_type_clusters_new.csv",
     "filters": {
         "column_equals": {

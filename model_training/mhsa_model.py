@@ -331,7 +331,7 @@ def plot_losses(loss_df):
 
 def main():
     # Load data
-    df = pd.read_csv('../data/residue_test_data/df_with_splits_mhsa_test.csv')
+    df = pd.read_csv('../data/residue_test_data/df_with_splits_mhsa_test_1.csv')
     
     # Create datasets
     train_dataset = ResidueDataset(df, 'train')
