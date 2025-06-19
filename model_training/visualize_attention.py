@@ -10,6 +10,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import os
 import logging
 import argparse
+import json
 from mhsa_model import ResiduePredictor, ResidueDataset
 from torch.utils.data import DataLoader
 
@@ -17,27 +18,37 @@ from torch.utils.data import DataLoader
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class AttentionVisualizer:
-    def __init__(self, model_path, data_path, output_dir='attention_analysis'):
+    def __init__(self, model_config_path=None, data_path=None, output_dir=None):
         """
         Initialize the attention visualizer.
-        
         Args:
-            model_path: Path to the trained model
-            data_path: Path to the data CSV file
-            output_dir: Directory to save visualizations
+            model_config_path: Path to the model config file
+            data_path: Path to the data CSV file (optional, will use config if not provided)
+            output_dir: Directory to save visualizations (optional, will use config name if not provided)
         """
-        self.model_path = model_path
-        self.data_path = data_path
+        # Load model config
+        if model_config_path is None:
+            model_config_path = os.path.join(os.path.dirname(__file__), 'model_config/train_config_extracellular_random_with_no_spoc.json')
+        with open(model_config_path) as f:
+            model_config = json.load(f)
+        config_name = model_config['name']
+        self.config_name = config_name
+        # Set output directory
+        if output_dir is None:
+            output_dir = os.path.join(os.path.dirname(__file__), config_name)
         self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
-        
+        os.makedirs(self.output_dir, exist_ok=True)
+        # Set data path
+        if data_path is None:
+            data_path = f'../data/preprocessing_tests/{config_name}/df_with_splits_for_mhsa.csv'
+        self.data_path = data_path
+        # Set model path
+        self.model_path = os.path.join(self.output_dir, 'best_model.pth')
         # Load data
-        self.df = pd.read_csv(data_path)
-        
+        self.df = pd.read_csv(self.data_path)
         # Load model
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.load_model()
-        
         # Create datasets
         self.test_dataset = ResidueDataset(self.df, 'test')
         self.test_loader = DataLoader(self.test_dataset, batch_size=1, shuffle=False)
@@ -614,22 +625,15 @@ def main():
     """Main function to run all visualizations and tests."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Visualize attention weights for MHSA model')
-    parser.add_argument('--all-test-codes', action='store_true', 
-                       help='Generate attention plots for all test codes')
-    parser.add_argument('--max-codes', type=int, default=None,
-                       help='Maximum number of test codes to visualize')
-    parser.add_argument('--skip-performance', action='store_true',
-                       help='Skip performance testing and confidence matrix')
-    parser.add_argument('--skip-feature-importance', action='store_true',
-                       help='Skip feature importance analysis')
-    
+    parser.add_argument('--model-config', type=str, default=None, help='Path to model config file')
+    parser.add_argument('--all-test-codes', action='store_true', help='Generate attention plots for all test codes')
+    parser.add_argument('--max-codes', type=int, default=None, help='Maximum number of test codes to visualize')
+    parser.add_argument('--skip-performance', action='store_true', help='Skip performance testing and confidence matrix')
+    parser.add_argument('--skip-feature-importance', action='store_true', help='Skip feature importance analysis')
     args = parser.parse_args()
     
     # Initialize visualizer
-    model_path = 'models/best_model.pth'  # Model saved in models directory
-    data_path = '../data/residue_test_data/df_with_splits_mhsa_test_1.csv'
-    
-    visualizer = AttentionVisualizer(model_path, data_path)
+    visualizer = AttentionVisualizer(model_config_path=args.model_config)
     
     if not args.skip_performance:
         # Test model performance

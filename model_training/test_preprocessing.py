@@ -6,6 +6,7 @@ from data_preprocessing import DataPreprocessor
 import json
 from typing import Dict, List, Optional
 from datetime import datetime
+import argparse
 
 # Set up logging
 logging.basicConfig(
@@ -84,34 +85,28 @@ def run_preprocessing_test(
         return
 
 def main():
-    # Define paths
-    data_config_path = "model_training/data_config.json"
-    output_dir = "data/preprocessing_tests"
-    
-    # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Get all config files from model_config directory
-    model_config_dir = "model_training/model_config"
-    #config_files = [f for f in os.listdir(model_config_dir) if f.endswith('.json')]
-    config_files = ['train_config_extracellular_random.json']
-    
-    logging.info(f"Found {len(config_files)} config files to test:")
-    for config_file in config_files:
-        logging.info(f"  - {config_file}")
-    
-    # Run preprocessing for each config file
-    for config_file in sorted(config_files):
-        model_config_path = os.path.join(model_config_dir, config_file)
-        run_preprocessing_test(
-            data_config_path=data_config_path,
-            model_config_path=model_config_path,
-            output_dir=output_dir
-        )
-    
-    logging.info(f"\n{'='*60}")
-    logging.info("All preprocessing tests completed!")
-    logging.info(f"Results saved in: {output_dir}")
+    parser = argparse.ArgumentParser(description='Test preprocessing for one or more model configs')
+    parser.add_argument('--data-config', type=str, required=True, help='Path to data config file')
+    parser.add_argument('--model-config', type=str, default=None, help='Path to a single model config file')
+    parser.add_argument('--config-dir', type=str, default=None, help='Directory containing model config files (*.json)')
+    parser.add_argument('--output-dir', type=str, default='data/preprocessing_tests', help='Directory to save results')
+    args = parser.parse_args()
 
-if __name__ == "__main__":
+    if args.model_config:
+        # Run a single config
+        run_preprocessing_test(args.data_config, args.model_config, args.output_dir)
+    elif args.config_dir:
+        # Run all configs in the directory
+        configs = [os.path.join(args.config_dir, f) for f in os.listdir(args.config_dir) if f.endswith('.json')]
+        if not configs:
+            print(f'No config files found in {args.config_dir}')
+            return
+        for config_path in configs:
+            print(f'\nRunning preprocessing for config: {config_path}')
+            run_preprocessing_test(args.data_config, config_path, args.output_dir)
+    else:
+        parser.print_help()
+        return
+
+if __name__ == '__main__':
     main() 

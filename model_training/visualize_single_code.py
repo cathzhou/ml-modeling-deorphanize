@@ -12,7 +12,7 @@ def visualize_single_code(code):
     """Visualize attention for a single code."""
     # Initialize visualizer
     model_path = '../model_training/models/best_model.pth'
-    data_path = '../data/residue_test_data/df_with_splits_mhsa_test_1.csv'
+    data_path = '../data/preprocessing_tests/extracellular_random_with_no_spoc/df_with_splits_for_mhsa.csv'
     
     try:
         visualizer = AttentionVisualizer(model_path, data_path)

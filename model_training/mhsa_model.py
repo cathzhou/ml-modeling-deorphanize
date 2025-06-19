@@ -10,6 +10,11 @@ from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
 import logging
 import time
 import os
+import json
+import argparse
+from sklearn.model_selection import GroupKFold
+import glob
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -208,7 +213,7 @@ def visualize_attention_weights(model, batch, epoch, output_dir='attention_plots
     plt.savefig(os.path.join(output_dir, f'attention_weights_epoch_{epoch}.png'))
     plt.close()
 
-def train_model(model, train_loader, valid_loader, num_epochs=10, learning_rate=1e-4):
+def train_model(model, train_loader, valid_loader, output_dir, num_epochs=10, learning_rate=1e-4):
     """Train the model."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
@@ -239,10 +244,6 @@ def train_model(model, train_loader, valid_loader, num_epochs=10, learning_rate=
             optimizer.step()
             
             train_loss += loss.item() * batch['label'].size(0)
-            
-            # Visualize attention weights for the first batch of each epoch
-            if batch_idx == 0:
-                visualize_attention_weights(model, batch, epoch)
         
         train_loss /= len(train_loader.dataset)
         train_losses.append(train_loss)
@@ -290,7 +291,7 @@ def train_model(model, train_loader, valid_loader, num_epochs=10, learning_rate=
         # Save best model
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
-            torch.save(model.state_dict(), 'models/best_model.pth')
+            torch.save(model.state_dict(), os.path.join(output_dir, 'best_model.pth'))
     
     train_duration = time.time() - train_start
     logging.info(f"Training finished. Took {train_duration:.1f} seconds")
@@ -330,36 +331,105 @@ def plot_losses(loss_df):
     return fig
 
 def main():
-    # Load data
-    df = pd.read_csv('../data/residue_test_data/df_with_splits_mhsa_test_1.csv')
-    
-    # Create datasets
-    train_dataset = ResidueDataset(df, 'train')
-    valid_dataset = ResidueDataset(df, 'valid')
-    test_dataset = ResidueDataset(df, 'test')
-    
-    # Create data loaders
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=32)
-    test_loader = DataLoader(test_dataset, batch_size=32)
-    
-    # Create model
-    input_dim = train_dataset.features.shape[1]
-    model = ResiduePredictor(input_dim)
-    
-    # Train model
-    train_losses, valid_losses = train_model(model, train_loader, valid_loader)
-    
-    # Plot losses
-    loss_df = pd.DataFrame({
-        'epoch': range(len(train_losses)),
-        'train_loss': train_losses,
-        'test_loss': valid_losses,
-        'model': 'ResiduePredictor'
-    })
-    fig = plot_losses(loss_df)
-    plt.savefig('models/loss_plot.png')
-    plt.close()
+    parser = argparse.ArgumentParser(description='Train MHSA model for residue contact prediction')
+    parser.add_argument('--model-config', type=str, required=True, help='Path to model config JSON')
+    parser.add_argument('--output-dir', type=str, default=None, help='Output directory (default: model_training/<config_name>/)')
+    args = parser.parse_args()
+
+    # Load model config to get experiment name
+    with open(args.model_config) as f:
+        model_config = json.load(f)
+    config_name = model_config['name']
+    output_dir = args.output_dir or os.path.join(os.path.dirname(__file__), config_name)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Read cross-validation and folds from config
+    cross_validate = model_config.get('cross_validate', False)
+    n_folds = model_config.get('n_folds', 5)
+    balance_known_unknown = model_config.get('balance_known_unknown', False)
+
+    # Path to preprocessing output
+    preprocess_dir = os.path.join('../data/preprocessing_tests', config_name)
+
+    if cross_validate:
+        # Find all fold CSVs
+        fold_csvs = sorted(glob.glob(os.path.join(preprocess_dir, 'df_with_splits_for_mhsa_fold*.csv')))
+        assert len(fold_csvs) == n_folds, f"Expected {n_folds} fold CSVs, found {len(fold_csvs)}"
+        all_metrics = []
+        for fold_idx, csv_path in enumerate(fold_csvs):
+            print(f"\n=== Fold {fold_idx+1}/{n_folds} ===")
+            fold_dir = os.path.join(output_dir, f'fold_{fold_idx+1}')
+            os.makedirs(fold_dir, exist_ok=True)
+            df = pd.read_csv(csv_path)
+            # Create datasets
+            train_dataset = ResidueDataset(df, 'train')
+            valid_dataset = ResidueDataset(df, 'valid')
+            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+            valid_loader = DataLoader(valid_dataset, batch_size=32)
+            # Create model
+            input_dim = train_dataset.features.shape[1]
+            model = ResiduePredictor(input_dim)
+            # Train model
+            train_losses, valid_losses = train_model(model, train_loader, valid_loader, fold_dir)
+            # Plot losses
+            loss_df = pd.DataFrame({
+                'epoch': range(len(train_losses)),
+                'train_loss': train_losses,
+                'test_loss': valid_losses,
+                'model': f'Fold_{fold_idx+1}'
+            })
+            fig = plot_losses(loss_df)
+            fig.savefig(os.path.join(fold_dir, 'loss_plot.png'))
+            plt.close(fig)
+            # Save model
+            torch.save(model.state_dict(), os.path.join(fold_dir, 'best_model.pth'))
+            # Evaluate on validation set
+            valid_labels = df[df['split']=='valid']['known_pair'].values
+            valid_preds = []
+            model.eval()
+            with torch.no_grad():
+                for batch in valid_loader:
+                    features = batch['features']
+                    outputs = model(features)
+                    valid_preds.extend(outputs.cpu().numpy().flatten())
+            from sklearn.metrics import roc_auc_score, f1_score, accuracy_score
+            auc = roc_auc_score(valid_labels, valid_preds)
+            f1 = f1_score(valid_labels, np.array(valid_preds) > 0.5)
+            acc = accuracy_score(valid_labels, np.array(valid_preds) > 0.5)
+            all_metrics.append({'auc': auc, 'f1': f1, 'accuracy': acc})
+            print(f"Fold {fold_idx+1} - AUC: {auc:.4f}, F1: {f1:.4f}, Acc: {acc:.4f}")
+        # Average metrics
+        avg_metrics = {k: np.mean([m[k] for m in all_metrics]) for k in all_metrics[0]}
+        print(f"\n=== Cross-Validation Results ({n_folds} folds) ===")
+        for k, v in avg_metrics.items():
+            print(f"{k}: {v:.4f}")
+    else:
+        # Create datasets
+        df = pd.read_csv(os.path.join(preprocess_dir, 'df_with_splits_for_mhsa.csv'))
+        train_dataset = ResidueDataset(df, 'train')
+        valid_dataset = ResidueDataset(df, 'valid')
+        test_dataset = ResidueDataset(df, 'test')
+        # Create data loaders
+        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        valid_loader = DataLoader(valid_dataset, batch_size=32)
+        test_loader = DataLoader(test_dataset, batch_size=32)
+        # Create model
+        input_dim = train_dataset.features.shape[1]
+        model = ResiduePredictor(input_dim)
+        # Train model
+        train_losses, valid_losses = train_model(model, train_loader, valid_loader, output_dir)
+        # Plot losses
+        loss_df = pd.DataFrame({
+            'epoch': range(len(train_losses)),
+            'train_loss': train_losses,
+            'test_loss': valid_losses,
+            'model': 'ResiduePredictor'
+        })
+        fig = plot_losses(loss_df)
+        fig.savefig(os.path.join(output_dir, 'loss_plot.png'))
+        plt.close(fig)
+        # Save model
+        torch.save(model.state_dict(), os.path.join(output_dir, 'best_model.pth'))
 
 if __name__ == '__main__':
     main() 

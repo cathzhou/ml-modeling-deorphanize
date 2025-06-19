@@ -40,5 +40,7 @@
         "random_state": 42,
         "num_workers": 4,
         "split_method": "random_balanced"
-    }
+    },
+    "cross_validate": false,
+    "n_folds": 5
 } 

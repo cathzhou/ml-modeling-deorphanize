@@ -1,0 +1,25 @@
+MODEL PERFORMANCE METRICS
+==================================================
+Accuracy: 0.5632
+Precision: 0.5691
+Recall: 0.7527
+F1_score: 0.6481
+Auc: 0.6193
+==================================================
+
+Prediction Distribution:
+  Predictions (0/1): [ 51 123]
+  True Labels (0/1): [81 93]
+  Confidence range: [0.1485, 0.7651]
+  Confidence mean: 0.5626
+  Confidence std: 0.1823
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.55      0.35      0.42        81
+           1       0.57      0.75      0.65        93
+
+    accuracy                           0.56       174
+   macro avg       0.56      0.55      0.54       174
+weighted avg       0.56      0.56      0.54       174

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GroupKFold
 import torch
 from torch.utils.data import Dataset, DataLoader
 import logging
@@ -203,6 +203,7 @@ class DataPreprocessor:
         """
         filtered_df = df.copy()
         initial_len = len(filtered_df)
+        initial_groups = filtered_df['afpd_dir_name'].nunique() if 'afpd_dir_name' in filtered_df.columns else None
         
         if filters:
             # Apply exact match filters
@@ -231,8 +232,11 @@ class DataPreprocessor:
             # Log filtering results
             final_len = len(filtered_df)
             removed = initial_len - final_len
+            final_groups = filtered_df['afpd_dir_name'].nunique() if 'afpd_dir_name' in filtered_df.columns else None
             logging.info(f"Filtering removed {removed} samples ({removed/initial_len*100:.1f}% of data)")
             logging.info(f"Remaining samples: {final_len}")
+            if initial_groups is not None and final_groups is not None:
+                logging.info(f"Groups before filtering: {initial_groups}, after filtering: {final_groups} (removed {initial_groups-final_groups})")
         
         return filtered_df
     
@@ -413,8 +417,8 @@ class DataPreprocessor:
                 n_known = (split_df['known_pair'] == 1).sum()
                 n_unknown = (split_df['known_pair'] == 0).sum()
                 total = len(split_df)
-                known_ratio = n_known / total
-                n_groups = split_df['afpd_dir_name'].nunique()
+                known_ratio = n_known / total if total > 0 else 0
+                n_groups = split_df['afpd_dir_name'].nunique() if 'afpd_dir_name' in split_df.columns else None
                 logging.info(f"\n{split_name} split balance:")
                 logging.info(f"  Known pairs: {n_known} ({known_ratio:.2%})")
                 logging.info(f"  Unknown pairs: {n_unknown} ({1-known_ratio:.2%})")
@@ -478,8 +482,8 @@ class DataPreprocessor:
                 n_known = (split_df['known_pair'] == 1).sum()
                 n_unknown = (split_df['known_pair'] == 0).sum()
                 total = len(split_df)
-                known_ratio = n_known / total
-                n_groups = split_df['afpd_dir_name'].nunique()
+                known_ratio = n_known / total if total > 0 else 0
+                n_groups = split_df['afpd_dir_name'].nunique() if 'afpd_dir_name' in split_df.columns else None
                 logging.info(f"\n{split_name} split balance:")
                 logging.info(f"  Known pairs: {n_known} ({known_ratio:.2%})")
                 logging.info(f"  Unknown pairs: {n_unknown} ({1-known_ratio:.2%})")
@@ -542,10 +546,10 @@ class DataPreprocessor:
                 else:
                     logging.info(f"Verified code column in {saved_file}: {len(saved_df)} rows")
                     # Print first 5 codes
-                    first_5_codes = saved_df['code'].head().tolist()
-                    logging.info(f"First 5 codes in {saved_file}:")
-                    for i, code in enumerate(first_5_codes, 1):
-                        logging.info(f"  {i}. {code}")
+                    # first_5_codes = saved_df['code'].head().tolist()
+                    # logging.info(f"First 5 codes in {saved_file}:")
+                    # for i, code in enumerate(first_5_codes, 1):
+                    #    logging.info(f"  {i}. {code}")
 
     def preprocess_data(self, 
                        data_path: Optional[str] = None,
@@ -557,6 +561,7 @@ class DataPreprocessor:
                        filters: Optional[Dict[str, Union[str, List[str], Dict[str, bool]]]] = None) -> Tuple[Dict[str, Dataset], Dict[str, StandardScaler]]:
         """
         Preprocess data and create train/valid/test splits.
+        If cross_validate and n_folds are set in the config, output n_folds CSVs for cross-validation.
         """
         # Use config values if not provided
         data_path = data_path or self.model_config['data_path']
@@ -564,7 +569,11 @@ class DataPreprocessor:
         valid_size = valid_size or self.model_config['data_params']['valid_size']
         random_state = random_state or self.model_config['data_params'].get('random_state', 42)
         filters = filters or self.model_config.get('filters')
-        
+
+        # Get cross-validation settings from config
+        cross_validate = self.model_config.get('cross_validate', False)
+        n_folds = self.model_config.get('n_folds', 5)
+
         # Get split method from config if not provided
         if split_method == 'cluster' and 'split_method' in self.model_config['data_params']:
             split_method = self.model_config['data_params']['split_method']
@@ -656,6 +665,29 @@ class DataPreprocessor:
             n_categories = len(encoder.classes_)
             logging.info(f"Encoded {cat_col} with {n_categories} unique categories")
         
+        # --- Cross-validation logic ---
+        if cross_validate:
+            logging.info(f"Performing group cross-validation with {n_folds} folds...")
+            group_col = 'afpd_dir_name'
+            groups = df[group_col]
+            gkf = GroupKFold(n_splits=n_folds)
+            config_name = self.model_config.get('name', 'unnamed_config')
+            output_dir = os.path.join('data', 'preprocessing_tests', config_name)
+            os.makedirs(output_dir, exist_ok=True)
+            residue_contact_cols = ['code', 'known_pair', 'split'] + self.data_config['residue_contact_columns']
+            for fold, (train_idx, valid_idx) in enumerate(gkf.split(df, df['known_pair'], groups)):
+                split_col = np.array(['train'] * len(df))
+                split_col[valid_idx] = 'valid'
+                fold_df = df.copy()
+                fold_df['split'] = split_col
+                minimal_df = fold_df[residue_contact_cols]
+                minimal_path = os.path.join(output_dir, f'df_with_splits_for_mhsa_fold{fold+1}.csv')
+                minimal_df.to_csv(minimal_path, index=False)
+                logging.info(f"Saved fold {fold+1} MHSA input file to: {minimal_path} ({len(minimal_df)} rows)")
+            # Return nothing for now (or could return a list of file paths)
+            return None, None
+        # --- End cross-validation logic ---
+        
         # Balance and split dataset in one operation
         train_df, valid_df, test_df = self.balance_and_split_dataset(
             df,
@@ -707,6 +739,13 @@ class DataPreprocessor:
         joined_df.to_csv(joined_path, index=False)
         logging.info(f"Saved joined file with splits to: {joined_path}")
         logging.info(f"Total rows in joined file: {len(joined_df)}")
+
+        # Save a minimal df_with_splits_for_mhsa.csv with only code, known_pair, split, and residue contact columns
+        residue_contact_cols = ['code', 'known_pair', 'split'] + self.data_config['residue_contact_columns']
+        minimal_df = df_with_splits[residue_contact_cols]
+        minimal_path = os.path.join(output_dir, 'df_with_splits_for_mhsa.csv')
+        minimal_df.to_csv(minimal_path, index=False)
+        logging.info(f"Saved minimal MHSA input file to: {minimal_path} ({len(minimal_df)} rows)")
         
         # Create datasets
         datasets = {
@@ -932,6 +971,8 @@ class DataPreprocessor:
             
             selected_unknown_groups = unknown_groups[start_idx:end_idx]
             logging.info(f"  Selected {len(selected_unknown_groups)} unknown groups for this round")
+            logging.info(f"  Known groups in round: {len(known_groups)}")
+            logging.info(f"  Total models in round: {len(round_df)}")
             
             # Create round dataframe
             round_df = pd.concat([
@@ -985,11 +1026,9 @@ class DataPreprocessor:
                 n_known = (split_df['known_pair'] == 1).sum()
                 n_unknown = (split_df['known_pair'] == 0).sum()
                 total = len(split_df)
-                known_ratio = n_known / total
-                logging.info(f"\n{split_name} split balance for round {round_idx + 1}:")
-                logging.info(f"  Known pairs: {n_known} ({known_ratio:.2%})")
-                logging.info(f"  Unknown pairs: {n_unknown} ({1-known_ratio:.2%})")
-                logging.info(f"  Total samples: {total}")
+                known_ratio = n_known / total if total > 0 else 0
+                n_groups = split_df['afpd_dir_name'].nunique() if 'afpd_dir_name' in split_df.columns else None
+                logging.info(f"    {split_name} split: {total} samples, {n_groups} groups, {n_known} known, {n_unknown} unknown")
         
         return round_results
 

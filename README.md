@@ -23,17 +23,19 @@ We aim to predict whether a secreted ligand binds a given GPCR using structural 
 ## Current Updates:
 
 * Developed a modular data processing pipeline driven by a configurable model file, allowing dynamic specification of input filters (e.g., extracellular-only residues, SPOC-derived metrics), sampling strategy (e.g., random, UMAP-cluster-based), and customizable input/output paths
-* Trained a preliminary model using only BW contact data (binary 0/1 contact indicators), with a dataset of 1,611 samples. The data was split into training, validation, and test sets with stratified sampling to preserve equal ratio of known vs. unknown
+* Trained a preliminary model using only BW contact data (binary 0/1 contact indicators), with two datasets, one with random sampling and another with UMAP-based sampling. The data was split into training, validation, and test sets with stratified sampling to preserve equal ratio of known vs. unknown
 * Binary input representation resembles sequential token data (e.g., text), making it well-suited for self-attention architectures
 * Can emphasize global contextual relationships between residue-ligand contacts
 * Provide interpretability through attention weights
-* Achieved ~50% accuracy, which is in line with expectations given the limited dataset size.
-* Generated detailed visual outputs (in model_training/attention_analysis) including attention maps for 60 test samples, feature importance rankings, confusion matrices, and exploratory visualizations to better understand model behavior
+* Achieved ~70% accuracy, which is in line with expectations given the limited dataset size.
+* Generated detailed visual outputs (in model_training folder) including attention maps for 50 test samples, feature importance rankings, confusion matrices, and other visualizations to better understand model behavior
 
 Next steps:
-* Conduct iterative training with the same known set but varying unknown samples to reduce bias and improve generalization
+* Conduct cross validation training with the same known set but varying unknown samples to reduce bias and improve generalization
 * Scale up to use most of larger dataset (~200k samples)
- * Integrate contextual information, such as gene expression data, to test whether multi-modal features boost predictive accuracy.
+* Integrate contextual information, such as alphafold metrics and gene expression data, to test whether multi-modal features boost predictive accuracy.
+
+---
 
 ## Input Features for Training
 
