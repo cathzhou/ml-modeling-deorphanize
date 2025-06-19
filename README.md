@@ -4,22 +4,6 @@ A machine learning pipeline and web application to predict ligand binding intera
 
 ---
 
-## Project Structure
-
-```
-gpcr-binding-predictor/
-├── data/                       # Contact maps, metadata, and expression scores
-├── model_training/            # Neural network training scripts
-├── notebooks/                 # EDA and visualization
-├── backend/                   # Inference API for the web app (FastAPI)
-├── frontend/                  # Vercel-hosted Next.js frontend
-├── diagrams/                  # Architecture diagrams
-├── feature_selection_all/     # Initial feature selection results
-└── README.md                  # Project documentation
-```
-
----
-
 ## Problem
 
 We aim to predict whether a secreted ligand binds a given GPCR using structural and contextual data:
@@ -279,6 +263,141 @@ For expression analysis with all receptor/ligand genes :
 
 * Save to csv
 * Indexed by (receptor, ligand)
+
+---
+
+## Configuration and Data Preprocessing
+
+### Configuration Files
+
+The project uses two main configuration files to manage data processing and model training:
+
+#### Data Configuration File
+- **Purpose**: Defines column mappings and feature groupings for the input data
+- **Location**: `model_training/configs/data_config.json`
+- **Key Components**:
+  - Column groupings for different feature types (residue contacts, distance metrics, ligand contacts, etc.)
+  - Categorical column definitions for encoding
+  - Expression feature column mappings
+  - Metadata column specifications
+
+#### Model Configuration File
+- **Purpose**: Controls model architecture, training parameters, and feature selection
+- **Location**: `model_training/configs/model_config.json`
+- **Key Components**:
+  - Model architecture parameters (embedding dimensions, attention heads, etc.)
+  - Training hyperparameters (learning rate, batch size, epochs)
+  - Feature group activation settings
+  - Data splitting and balancing parameters
+  - Model name and save paths
+
+### Data Preprocessing Pipeline
+
+The data preprocessing system handles the complex input data structure and prepares it for the MHSA model:
+
+#### Feature Processing
+- **Residue Contacts**: Binary contact maps (0/1) indicating residue-residue interactions
+- **Distance Metrics**: Spatial distance measurements between ligand termini and receptor domains
+- **Ligand Contact Profiles**: Contact patterns at ligand N- and C-termini
+- **AlphaFold Metrics**: Quality scores from AlphaFold structure predictions
+- **Expression Features**: Co-expression data from HPA database
+- **Metadata**: Categorical information about receptor families and ligand properties
+
+#### Normalization and Encoding
+- **Z-score normalization** for continuous features
+- **Min-max scaling** to 0-1 range for certain feature groups
+- **Label encoding** for categorical variables
+- **Feature-specific processing** based on data type (binary features remain unchanged)
+
+#### Data Splitting and Balancing
+- **Group-aware splitting**: Ensures all models from the same receptor-ligand pair stay in the same split
+- **Balanced sampling**: Maintains equal representation of known and unknown pairs
+- **Cluster-based selection**: Uses UMAP clustering for spatially balanced unknown pair selection
+- **Multiple rounds**: Supports training with different unknown pair subsets
+
+### Multi-Head Self-Attention (MHSA) Model
+
+The core model uses a transformer-inspired architecture specifically designed for residue contact prediction:
+
+#### Model Architecture
+- **Input Projection**: Projects each feature to a high-dimensional embedding space
+- **Positional Encoding**: Adds sequence position information to maintain spatial context
+- **Multi-Head Attention**: 8 attention heads that learn different types of feature relationships
+- **Residual Connections**: Helps with gradient flow and training stability
+- **Layer Normalization**: Stabilizes training and improves convergence
+- **Feed-Forward Networks**: Non-linear transformations between attention layers
+- **Global Pooling**: Aggregates sequence-level features into a single prediction
+
+#### Attention Mechanism
+- **Self-Attention**: Each feature attends to all other features to capture global dependencies
+- **Scaled Dot-Product**: Standard attention computation with scaling for numerical stability
+- **Multi-Head Processing**: Parallel attention heads capture different types of relationships
+- **Attention Weights**: Provide interpretable insights into feature importance
+
+#### Training Features
+- **Binary Cross-Entropy Loss**: Standard loss function for binary classification
+- **AdamW Optimizer**: Adaptive learning rate with weight decay
+- **Dropout Regularization**: Prevents overfitting during training
+- **Early Stopping**: Monitors validation loss to prevent overfitting
+- **Model Checkpointing**: Saves best model based on validation performance
+
+### Input Data Structure
+
+The model accepts preprocessed feature vectors with the following characteristics:
+
+#### Feature Dimensions
+- **Residue Contacts**: Variable length binary vectors (typically 200-300 features)
+- **Distance Metrics**: Fixed-length continuous vectors (normalized distances)
+- **Ligand Contacts**: Binary contact profiles at ligand termini
+- **AlphaFold Scores**: Quality metrics from structure prediction
+- **Expression Data**: Co-expression correlation and similarity metrics
+- **Metadata**: Encoded categorical information
+
+#### Data Format
+- **CSV Input**: Tabular data with columns for each feature type
+- **Code Identifiers**: Unique identifiers for each receptor-ligand pair
+- **Split Labels**: Train/validation/test assignments
+- **Target Labels**: Binary binding predictions (known/unknown pairs)
+
+#### Preprocessing Output
+- **Normalized Features**: All features scaled to appropriate ranges
+- **Encoded Categories**: Categorical variables converted to numerical representations
+- **Balanced Splits**: Equal representation of positive and negative samples
+- **Group Integrity**: Related samples kept together in splits
+
+### Visualization and Analysis Tools
+
+The project includes comprehensive tools for model interpretation and analysis:
+
+#### Attention Visualization
+- **Individual Code Analysis**: Generate attention heatmaps for specific receptor-ligand pairs
+- **Multi-Head Visualization**: Display attention patterns across all 8 attention heads
+- **Feature Labeling**: Show feature names on axes for interpretability
+- **Batch Processing**: Generate plots for all test codes automatically
+
+#### Model Performance Analysis
+- **Confidence Matrix**: Visualize prediction confidence vs true labels
+- **ROC and PR Curves**: Standard classification performance metrics
+- **Confusion Matrix**: Detailed classification results
+- **Performance Metrics**: Accuracy, precision, recall, F1-score, and AUC
+
+#### Feature Importance Analysis
+- **Attention-Based Importance**: Use attention weights to identify important features
+- **Top Feature Ranking**: Rank features by their attention scores
+- **Attention Heatmaps**: Visualize attention patterns for top features
+- **Cross-Sample Averaging**: Aggregate importance across multiple samples
+
+#### Usage Examples
+```bash
+# Generate attention plots for all test codes
+python visualize_attention.py --all-test-codes
+
+# Limit to first 10 test codes
+python visualize_attention.py --all-test-codes --max-codes 10
+
+# Skip performance analysis, only generate attention plots
+python visualize_attention.py --all-test-codes --skip-performance --skip-feature-importance
+```
 
 ---
 
