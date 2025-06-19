@@ -1,6 +1,6 @@
 # GPCR-Ligand Binding Predictor
 
-A machine learning pipeline and web application to predict ligand binding interactions with Class A and Class B G-protein Coupled Receptors (GPCRs), leveraging AlphaFold-predicted binary contact maps, receptor-ligand co-expression, ligand N- and C-terminal contact profiles, spatial distance metrics, and family-level annotations. Built to support exploratory receptor-ligand discovery and prioritization.
+A machine learning pipeline (and future web application) to predict ligand binding interactions with Class A and Class B G-protein Coupled Receptors (GPCRs), leveraging AlphaFold-predicted binary contact maps, receptor-ligand co-expression, ligand N- and C-terminal contact profiles, spatial distance metrics, and family-level annotations. Built to support exploratory receptor-ligand discovery and prioritization.
 
 ---
 
@@ -8,7 +8,7 @@ A machine learning pipeline and web application to predict ligand binding intera
 
 We aim to predict whether a secreted ligand binds a given GPCR using structural and contextual data:
 
-* **AlphaFold Modeled Structure Metrics**: 5 models per receptor-ligand pair, metrics like 
+* **AlphaFold Modeled Structure Metrics**: 5 models per receptor-ligand pair
 * **Binary Contact Maps**: 0 = no contact, 1 = contact for each BW residue
 * **Ligand Contact Maps**: Contact profile across ligand N- and C-terminal residues
 * **Distance Metrics**: Spatial distances between ligand termini and receptor transmembrane domains
@@ -20,6 +20,20 @@ We aim to predict whether a secreted ligand binds a given GPCR using structural 
     * `known_pair = 0`: Unknown — potentially unvalidated binder
 
 ---
+## Current Updates:
+
+* Developed a modular data processing pipeline driven by a configurable model file, allowing dynamic specification of input filters (e.g., extracellular-only residues, SPOC-derived metrics), sampling strategy (e.g., random, UMAP-cluster-based), and customizable input/output paths
+* Trained a preliminary model using only BW contact data (binary 0/1 contact indicators), with a dataset of 1,611 samples. The data was split into training, validation, and test sets with stratified sampling to preserve equal ratio of known vs. unknown
+* Binary input representation resembles sequential token data (e.g., text), making it well-suited for self-attention architectures
+* Can emphasize global contextual relationships between residue-ligand contacts
+* Provide interpretability through attention weights
+* Achieved ~50% accuracy, which is in line with expectations given the limited dataset size.
+* Generated detailed visual outputs including attention maps for 60 test samples, feature importance rankings, confusion matrices, and exploratory visualizations to better understand model behavior
+
+Next steps:
+* Conduct iterative training with the same known set but varying unknown samples to reduce bias and improve generalization
+* Scale up to use most of larger dataset (~200k samples)
+ * Integrate contextual information, such as gene expression data, to test whether multi-modal features boost predictive accuracy.
 
 ## Input Features for Training
 
@@ -46,7 +60,6 @@ Each input is a receptor-ligand model.
 * Columns like `EC_lig1_mid`, `TM1_EC_lig1_mid`, `mid_lig1_CT`, etc.
 * Represent physical distances from receptor domains to ligand termini
 * Shape: `[D_dist]` where each value is a scalar distance (e.g., float)
-* Normalize (z-score) before feeding into the network
 * Provide geometric spatial context around binding orientation
 
 ### 5. Receptor Metadata
@@ -139,19 +152,57 @@ Positional Embedding       ─┤
                                                ↓
                                   Sigmoid Output: P(binding)
 ```
-### Data Processing
-* The columns are in the same order as listed in the input_csv_columns.txt file, the description for each column is indicated by what becomes the colon and braces
-* Do not use the columns labeled `dont_use`
-* Make the known and unknown balanced within each set
-* For the unknown, there are 2 different ways of selecting them
-    * Select unknowns by sampling in an even distribution spatially for the umap made by the `nmfUMAP1_af_qc` and `nmfUMAP2_af_qc` columns
-    * Do completely random sampling
-* Normalize metrics within each of train/valid/test sets
-* Perform encoding for categorical columns
 
-### Models
-* Multiple models based on preprocessing (with/without spoc, with/without expression, etc.)
-* Currently testing: Extracellular only, with spoc but removed non-nan spoc columns
+---
+
+## Configuration and Data Preprocessing
+
+### Configuration Files
+
+The project uses two main configuration files to manage data processing and model training:
+
+#### Data Configuration File
+- **Purpose**: Defines column mappings and feature groupings for the input data
+- **Location**: `model_training/configs/data_config.json`
+- **Key Components**:
+  - Column groupings for different feature types (residue contacts, distance metrics, ligand contacts, etc.)
+  - Categorical column definitions for encoding
+  - Expression feature column mappings
+  - Metadata column specifications
+
+#### Model Configuration File
+- **Purpose**: Controls model architecture, training parameters, and feature selection
+- **Location**: `model_training/configs/model_config.json`
+- **Key Components**:
+  - Model architecture parameters (embedding dimensions, attention heads, etc.)
+  - Training hyperparameters (learning rate, batch size, epochs)
+  - Feature group activation settings
+  - Data splitting and balancing parameters
+  - Model name and save paths
+
+### Data Preprocessing Pipeline
+
+The data preprocessing system handles the complex input data structure and prepares it for the MHSA model:
+
+#### Feature Processing
+- **Residue Contacts**: Binary contact maps (0/1) indicating residue-residue interactions
+- **Distance Metrics**: Spatial distance measurements between ligand termini and receptor domains
+- **Ligand Contact Profiles**: Contact patterns at ligand N- and C-termini
+- **AlphaFold Metrics**: Quality scores from AlphaFold structure predictions
+- **Expression Features**: Co-expression data from HPA database
+- **Metadata**: Categorical information about receptor families and ligand properties
+
+#### Normalization and Encoding
+- **Z-score normalization** for continuous features
+- **Min-max scaling** to 0-1 range for certain feature groups
+- **Label encoding** for categorical variables
+- **Feature-specific processing** based on data type (binary features remain unchanged)
+
+#### Data Splitting and Balancing
+- **Group-aware splitting**: Ensures all models from the same receptor-ligand pair stay in the same split
+- **Balanced sampling**: Maintains equal representation of known and unknown pairs
+- **Cluster-based selection**: Uses UMAP clustering for spatially balanced unknown pair selection
+- **Multiple rounds**: Supports training with different unknown pair subsets
 
 ---
 
@@ -266,55 +317,6 @@ For expression analysis with all receptor/ligand genes :
 
 ---
 
-## Configuration and Data Preprocessing
-
-### Configuration Files
-
-The project uses two main configuration files to manage data processing and model training:
-
-#### Data Configuration File
-- **Purpose**: Defines column mappings and feature groupings for the input data
-- **Location**: `model_training/configs/data_config.json`
-- **Key Components**:
-  - Column groupings for different feature types (residue contacts, distance metrics, ligand contacts, etc.)
-  - Categorical column definitions for encoding
-  - Expression feature column mappings
-  - Metadata column specifications
-
-#### Model Configuration File
-- **Purpose**: Controls model architecture, training parameters, and feature selection
-- **Location**: `model_training/configs/model_config.json`
-- **Key Components**:
-  - Model architecture parameters (embedding dimensions, attention heads, etc.)
-  - Training hyperparameters (learning rate, batch size, epochs)
-  - Feature group activation settings
-  - Data splitting and balancing parameters
-  - Model name and save paths
-
-### Data Preprocessing Pipeline
-
-The data preprocessing system handles the complex input data structure and prepares it for the MHSA model:
-
-#### Feature Processing
-- **Residue Contacts**: Binary contact maps (0/1) indicating residue-residue interactions
-- **Distance Metrics**: Spatial distance measurements between ligand termini and receptor domains
-- **Ligand Contact Profiles**: Contact patterns at ligand N- and C-termini
-- **AlphaFold Metrics**: Quality scores from AlphaFold structure predictions
-- **Expression Features**: Co-expression data from HPA database
-- **Metadata**: Categorical information about receptor families and ligand properties
-
-#### Normalization and Encoding
-- **Z-score normalization** for continuous features
-- **Min-max scaling** to 0-1 range for certain feature groups
-- **Label encoding** for categorical variables
-- **Feature-specific processing** based on data type (binary features remain unchanged)
-
-#### Data Splitting and Balancing
-- **Group-aware splitting**: Ensures all models from the same receptor-ligand pair stay in the same split
-- **Balanced sampling**: Maintains equal representation of known and unknown pairs
-- **Cluster-based selection**: Uses UMAP clustering for spatially balanced unknown pair selection
-- **Multiple rounds**: Supports training with different unknown pair subsets
-
 ### Multi-Head Self-Attention (MHSA) Model
 
 The core model uses a transformer-inspired architecture specifically designed for residue contact prediction:
@@ -363,7 +365,7 @@ The model accepts preprocessed feature vectors with the following characteristic
 - **Normalized Features**: All features scaled to appropriate ranges
 - **Encoded Categories**: Categorical variables converted to numerical representations
 - **Balanced Splits**: Equal representation of positive and negative samples
-- **Group Integrity**: Related samples kept together in splits
+- **Groups**: Related samples kept together in splits
 
 ### Visualization and Analysis Tools
 
