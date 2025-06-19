@@ -28,7 +28,7 @@ We aim to predict whether a secreted ligand binds a given GPCR using structural 
 * Can emphasize global contextual relationships between residue-ligand contacts
 * Provide interpretability through attention weights
 * Achieved ~50% accuracy, which is in line with expectations given the limited dataset size.
-* Generated detailed visual outputs including attention maps for 60 test samples, feature importance rankings, confusion matrices, and exploratory visualizations to better understand model behavior
+* Generated detailed visual outputs (in model_training/attention_analysis) including attention maps for 60 test samples, feature importance rankings, confusion matrices, and exploratory visualizations to better understand model behavior
 
 Next steps:
 * Conduct iterative training with the same known set but varying unknown samples to reduce bias and improve generalization
